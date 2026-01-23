@@ -25,22 +25,6 @@ AUP Learning Cloud is a tailored JupyterHub deployment designed to provide an in
 
 ![Software Architecture](docs/imgs/software-stack.png)
 
-## Learning Solution
-
-AUP Learning Cloud offers the following Learning Toolkits:
-
-> [!IMPORTANT]
-> Only [**Deep Learning**](projects/DL) and [**Large Language Model from Scratch**](projects/LLM) are available in the v1.0 release.
-
-- [**Computer Vision**](projects/CV) \
-Includes 10 hands-on labs covering common computer vision concepts and techniques.
-
-- [**Deep Learning**](projects/DL) \
-Includes 12 hands-on labs covering common deep learning concepts and techniques.
-
-- [**Large Language Model from Scratch**](projects/LLM) \
-Includes 9 hands-on labs designed to teach LLM development from scratch.
-
 ## Quick Start
 
 The simplest way to deploy AUP Learning Cloud on a single machine in a development or demo environment.
@@ -61,6 +45,9 @@ sudo usermod -aG docker $USER
 
 # Apply group changes without logout (or logout/login instead)
 newgrp docker
+
+# Install Build Tools
+sudo apt install build-essential
 ```
 
 > **Note**: See [Docker Post-installation Steps](https://docs.docker.com/engine/install/linux-postinstall/) and [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for details.
@@ -94,13 +81,28 @@ sudo ./single-node.sh upgrade-runtime
 # Rebuild images after modifying Dockerfiles
 sudo ./single-node.sh build-images
 ```
-
 ## Manual Installation
 
 For users who prefer step-by-step manual installation or need more control over the deployment process:
 
 - [Single-Node Manual Deployment](deploy/README.md#single-node-deployment) - Detailed manual setup for development and demo environments
 - [Multi-Node Cluster Deployment](deploy/README.md#multi-node-cluster-deployment) - Production deployment with Ansible playbooks
+
+## Learning Solution
+
+AUP Learning Cloud offers the following Learning Toolkits:
+
+> [!IMPORTANT]
+> Only [**Deep Learning**](projects/DL) and [**Large Language Model from Scratch**](projects/LLM) are available in the v1.0 release.
+
+- [**Computer Vision**](projects/CV) \
+Includes 10 hands-on labs covering common computer vision concepts and techniques.
+
+- [**Deep Learning**](projects/DL) \
+Includes 12 hands-on labs covering common deep learning concepts and techniques.
+
+- [**Large Language Model from Scratch**](projects/LLM) \
+Includes 9 hands-on labs designed to teach LLM development from scratch.
 
 ## Key Features
 
