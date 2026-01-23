@@ -33,7 +33,7 @@ hub:
 	 	echo "Building Hub Image..."; \
 		echo "-------------------------------------------";
 
-	cd Hub && ./build.sh
+	cd Hub && bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-hub:latest
 
 # --- Course Images ---
@@ -44,7 +44,7 @@ cv:
 		echo "Building CV Course Image..."; \
 		echo "-------------------------------------------";
 
-	cd Courses/CV && ./build.sh
+	cd Courses/CV && bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-cv:latest
 
 dl:
@@ -52,7 +52,7 @@ dl:
 		echo "Building DL Course Image..."; \
 		echo "-------------------------------------------";
 
-	cd Courses/DL && ./build.sh
+	cd Courses/DL && bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-dl:latest
 
 llm:
@@ -60,7 +60,7 @@ llm:
 		echo "Building LLM Course Image..."; \
 		echo "-------------------------------------------";
 
-	cd Courses/LLM && ./build.sh
+	cd Courses/LLM && bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-llm:latest
 
 # --- Export Images ---
