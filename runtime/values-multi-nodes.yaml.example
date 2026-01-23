@@ -1,0 +1,151 @@
+# Modifications Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Portions of this file consist of AI-generated content.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Multi-Node Deployment Values
+# Copy this file and customize for your environment:
+#   cp values-multi-nodes.yaml.example values-multi-nodes.yaml
+#
+# Deploy with:
+#   helm install jupyterhub ./jupyterhub -n jupyterhub --create-namespace \
+#     -f values.yaml -f values-multi-nodes.yaml
+
+# Authentication mode: "auto-login" | "dummy" | "github" | "multi"
+#   - auto-login: No credentials required, auto-login as 'student' (default, for single-node)
+#   - dummy: Accept any username/password (for testing)
+#   - github: GitHub OAuth authentication
+#   - multi: GitHub OAuth + Local accounts
+custom:
+  authMode: "multi"
+  # GitHub organization name for team-based resource access
+  # Users must be members of this org to access resources via GitHub OAuth
+  githubOrgName: "your-github-org"
+
+hub:
+  db:
+    pvc:
+      storageClassName: nfs-client
+  # If you modify the hub image, you should change it here.
+  image:
+    name: ghcr.io/amdresearch/auplc-hub
+    tag: v0.1
+    pullPolicy: Always
+
+  extraConfig:
+    01-templates-and-static: |
+      import os
+      import tornado.web
+
+      template_path = os.environ.get('JUPYTERHUB_TEMPLATE_PATH', '/tmp/custom_templates')
+      print(f"[DEBUG] Template path: {template_path}")
+
+      c.JupyterHub.template_paths = [template_path]
+      print(f"Template paths set to: {c.JupyterHub.template_paths}")
+
+      if not hasattr(c.JupyterHub, 'extra_handlers') or c.JupyterHub.extra_handlers is None:
+          c.JupyterHub.extra_handlers = []
+      print("Static file handler configuration completed")
+
+    02-hide-logout-for-autologin: |
+      # Hide logout button in auto-login mode
+      if AUTH_MODE == "auto-login":
+          c.JupyterHub.template_vars = {"hide_logout": True}
+          print("[INFO] Auto-login mode: logout button hidden")
+
+  extraFiles:
+    announcement.txt:
+    # If you want to edit the notice on login.html, change here.
+      mountPath: /usr/local/share/jupyterhub/static/announcement.txt
+      stringData: |
+          <div class="announcement-box" style="padding: 1em; border: 1px solid #ccc; border-radius: 6px; background-color: #f8f8f8;">
+          <h3>Welcome to AUP Remote Lab!</h3>
+          <p>This is a <strong>dynamic announcement</strong>.</p>
+          <p>My location is on <code>runtime/values.yaml</code></p>
+          <p>You can edit this via <strong>ConfigMap</strong> without rebuilding the image.</p>
+          </div>
+
+  config:
+    # ---- Hub Core ----
+    Authenticator:
+      allow_all: true
+      admin_users:
+        - ADMIN1
+        - ADMIN2
+
+    # ---- GitHub OAuth ----
+    # If you are only using GitHub Oath, not Multi-Auth, the link should be:
+    # https://<Your.domain>/hub/oauth_callback
+    GitHubOAuthenticator:
+      oauth_callback_url: "https://<Your.domain>/hub/github/oauth_callback"
+      client_id: "TODO"
+      client_secret: "TODO"
+      allowed_organizations:
+        - <YOUR-ORG-NAME>
+      scope:
+        - read:user
+        - read:org
+
+    # ---- KubeSpawner Prepuller Setup ----
+    KubeSpawner:
+      image_pull_policy: IfNotPresent
+
+# singleuser:
+#   extraEnv:
+#   #this should be configured based on your AIPC  GPU type.
+#      HSA_OVERRIDE_GFX_VERSION: "11.0.0"
+#   storage:
+#     dynamic:
+#       storageClass: nfs-client
+
+debug:
+  enabled: false
+
+proxy:
+  service:
+    # If you want to use <domain>, config the domain on Ingress section.
+    #type: ClusterIP
+    # If you want to use LocadBalancer
+    #type: LoadBalancer
+    # If you want to use <IP>:<Port>
+    type: NodePort
+    nodePorts:
+      http: 30890
+
+imagePullSecrets:
+  - github-registry-secret
+
+
+# Set up all your images here for prepulling.
+prePuller:
+  extraImages:
+    aup-cpu-notebook:
+      name: ghcr.io/amdresearch/aup-cpu-notebook
+      tag: v1.0
+    aup-course-cv:
+      name: ghcr.io/amdresearch/auplc-cv
+      tag: v1.0
+    aup-course-dl:
+      name: ghcr.io/amdresearch/auplc-dl
+      tag: v1.0
+    aup-course-llm:
+      name: ghcr.io/amdresearch/auplc-llm
+      tag: v1.0
+    aup-jupyterhub-hub:
+      name: ghcr.io/amdresearch/auplc-hub
+      tag: v0.1

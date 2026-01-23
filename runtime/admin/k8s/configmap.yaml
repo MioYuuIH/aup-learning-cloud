@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: admin-backend-config
+data:
+  SMTP_HOST: "smtp.example.com"
+  SMTP_PORT: "587"
+  FROM_EMAIL: "noreply@example.com"
