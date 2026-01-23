@@ -43,7 +43,7 @@ Includes 9 hands-on labs designed to teach LLM development from scratch.
 
 ## Quick Start
 
-The simplest way to deploy AUP Learning Cloud on a single machine.
+The simplest way to deploy AUP Learning Cloud on a single machine in a development or demo environment.
 
 ### Prerequisites
 - **Hardware**: AMD Ryzen™ AI Halo Device (e.g., AI Max+ 395, AI Max 390)
@@ -95,6 +95,13 @@ sudo ./single-node.sh upgrade-runtime
 sudo ./single-node.sh build-images
 ```
 
+## Manual Installation
+
+For users who prefer step-by-step manual installation or need more control over the deployment process:
+
+- [Single-Node Manual Deployment](deploy/README.md#single-node-deployment) - Detailed manual setup for development and demo environments
+- [Multi-Node Cluster Deployment](deploy/README.md#multi-node-cluster-deployment) - Production deployment with Ansible playbooks
+
 ## Key Features
 
 ### Hardware Acceleration
@@ -136,13 +143,6 @@ Current environments are set up as `RESOURCE_IMAGES` in `runtime/jupyterhub/file
 - [JupyterHub Configuration](docs/jupyterhub/README.md) - Detailed JupyterHub settings
 - [GitHub OAuth Setup](docs/jupyterhub/How_to_Setup_GitHub_OAuth.md) - OAuth configuration
 - [Maintenance Manual](docs/user-manual/aup-remote-lab-user-manual-admin-new.md) - Operations guide
-
-## Manual Installation
-
-For users who prefer step-by-step manual installation or need more control over the deployment process:
-
-- [Single-Node Manual Deployment](deploy/README.md#single-node-deployment) - Detailed manual setup for development and demo environments
-- [Multi-Node Cluster Deployment](deploy/README.md#multi-node-cluster-deployment) - Production deployment with Ansible playbooks
 
 ## Contributing
 
