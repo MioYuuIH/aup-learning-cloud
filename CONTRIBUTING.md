@@ -179,6 +179,20 @@ Standard production code rules apply to:
   git config --global core.autocrlf input
   ```
 
+## Branch Naming Example
+| Prefix | Use Case | Example |
+| :--- | :--- | :--- |
+| **feature/** | Developing new features or enhancements | `feature/user-login` |
+| **bugfix/** | Fixing bugs in development or staging | `bugfix/sidebar-display` |
+| **hotfix/** | Urgent fixes for critical issues in Production | `hotfix/payment-gateway-crash` |
+| **refactor/** | Code restructuring without changing functionality | `refactor/api-response-handler` |
+| **docs/** | Documentation updates only | `docs/update-readme` |
+| **chore/** | Routine tasks, dependency updates, build config | `chore/update-dependencies` |
+| **test/** | Adding or correcting test cases | `test/add-unit-tests` |
+| **perf/** | Performance optimizations | `perf/database-query-tuning` |
+| **style/** | Code formatting, linting (no logic change) | `style/fix-lint-errors` |
+| **ci/** | CI/CD configuration and scripts | `ci/github-actions-setup` |
+
 ## Questions?
 
 - Open an issue for bugs or feature requests
