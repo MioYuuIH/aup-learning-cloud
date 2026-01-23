@@ -1,0 +1,65 @@
+# --- Release Title and Tag Templates ---
+# $RESOLVED_VERSION is calculated based on the version-template below
+name-template: 'v$RESOLVED_VERSION Pre-release 🏗️'
+tag-template: 'v$RESOLVED_VERSION'
+
+# --- Pre-release Logic ---
+# Marks the release as "Pre-release" in the GitHub UI
+prerelease: true
+
+# Versioning logic:
+# Uses the next calculated patch version and appends the PR number as a suffix
+# Example: 1.2.0-rc.105
+version-template: '$NEXT_PATCH_VERSION-rc.$NUMBER'
+
+# --- Version Increment Rules ---
+# Determines whether to bump Major, Minor, or Patch based on PR Labels
+version-resolver:
+  major:
+    labels:
+      - 'major'
+      - 'breaking-change'
+  minor:
+    labels:
+      - 'feature'
+      - 'enhancement'
+  patch:
+    labels:
+      - 'bug'
+      - 'fix'
+      - 'security'
+  default: patch
+
+# --- Release Notes Categorization ---
+# Organizes the PRs into sections in the release notes
+categories:
+  - title: '🚀 New Features'
+    labels:
+      - 'feature'
+      - 'enhancement'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'bug'
+      - 'fix'
+  - title: '🛡️ Security'
+    labels:
+      - 'security'
+  - title: '🧰 Maintenance & Infrastructure'
+    labels:
+      - 'chore'
+      - 'ci'
+      - 'documentation'
+
+# --- Cleanup ---
+# PRs with these labels will be ignored in the release notes
+exclude-labels:
+  - 'skip-release'
+  - 'duplicate'
+
+# --- Release Body Template ---
+template: |
+  ## What's Changed in this Pre-release
+  $CHANGES
+
+  ***
+  **Full Changelog**: $REPOSITORY_URL/compare/$PREVIOUS_TAG...$NEXT_TAG
