@@ -1,0 +1,19 @@
+nfs:
+  server: <Your-Server-hostname>
+  path: <Your-Server-path>
+
+storageClass:
+  name: nfs-client
+  defaultClass: true
+  onDelete: retain
+  pathPattern: '/${.PVC.namespace}-${.PVC.name}'
+
+# Additional recommended settings
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+
+podSecurityPolicy:
+  enabled: false
