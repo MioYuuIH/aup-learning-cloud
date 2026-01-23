@@ -1,16 +1,14 @@
 # --- Release Title and Tag Templates ---
-# $RESOLVED_VERSION is calculated based on the version-template below
-name-template: 'v$RESOLVED_VERSION Pre-release 🏗️'
-tag-template: 'v$RESOLVED_VERSION'
+# Use curly braces ${} for better variable resolution safety
+name-template: 'v${major}.${minor}.${patch}-rc.${number} Pre-release 🏗️'
+tag-template: 'v${major}.${minor}.${patch}-rc.${number}'
 
 # --- Pre-release Logic ---
 # Marks the release as "Pre-release" in the GitHub UI
 prerelease: true
 
-# Versioning logic:
-# Uses the next calculated patch version and appends the PR number as a suffix
-# Example: 1.2.0-rc.105
-version-template: '$NEXT_PATCH_VERSION-rc.$NUMBER'
+# This is the most stable way to define the version string
+version-template: '${major}.${minor}.${patch}-rc.${number}'
 
 # --- Version Increment Rules ---
 # Determines whether to bump Major, Minor, or Patch based on PR Labels
