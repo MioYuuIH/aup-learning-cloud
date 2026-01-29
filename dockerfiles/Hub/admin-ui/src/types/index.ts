@@ -98,3 +98,19 @@ export interface Group {
   users: string[];
   properties: Record<string, unknown>;
 }
+
+// JupyterHub data injected into window by the server
+export interface JHData {
+  base_url?: string;
+  prefix?: string;
+  user?: string;
+  admin_access?: boolean;
+  xsrf_token?: string;
+}
+
+// Extend Window interface to include jhdata
+declare global {
+  interface Window {
+    jhdata?: JHData;
+  }
+}

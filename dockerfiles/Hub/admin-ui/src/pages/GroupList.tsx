@@ -129,7 +129,7 @@ export function GroupList() {
         <Button
           variant="outline-secondary"
           as="a"
-          href={`${(window as any).jhdata?.base_url || '/hub/'}admin`}
+          href={`${window.jhdata?.base_url ?? '/hub/'}admin`}
         >
           Legacy Admin
         </Button>

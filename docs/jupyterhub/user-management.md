@@ -1,6 +1,6 @@
 # User Management Guide
 
-Scripts for batch user operations with JupyterHub Native Authenticator.
+This guide covers user management via the Admin Panel (web interface) and CLI scripts.
 
 ## Prerequisites
 
@@ -63,6 +63,84 @@ Or add to your shell profile (~/.bashrc or ~/.zshrc):
 ```bash
 alias jhtoken='export JUPYTERHUB_TOKEN=$(kubectl -n jupyterhub get secret jupyterhub-admin-credentials -o go-template="{{index .data \"api-token\" | base64decode}}")'
 ```
+
+## Web Interface (Admin Panel)
+
+Access the Admin Panel at `/hub/admin/users`.
+
+<!-- TODO: Add screenshot of the Admin Panel user list -->
+<!-- ![Admin Panel User List](./images/user-1-admin-panel.png) -->
+
+### User Table
+
+The user table displays:
+- **Username** - Click to view user details
+- **Admin** - Admin status badge
+- **Quota** - Current quota balance (if quota system enabled)
+- **Server** - Server status (Running/Stopped)
+- **Last Activity** - Last login or activity time
+
+### Create User
+
+1. Click **"Create Users"** button
+2. Enter usernames (one per line for batch creation)
+3. Choose password option:
+   - **Generate random passwords** (default) - Each user gets a unique password
+   - **Set password** - Enter a password for all users
+4. (Optional) Check **"Force password change on first login"**
+5. (Optional) Check **"Grant admin privileges"**
+6. Click **"Create Users"**
+7. After creation, copy the username/password table to share with users
+
+<!-- TODO: Add screenshot of Create User modal -->
+<!-- ![Create User Modal](./images/user-2-create-modal.png) -->
+
+### Edit User
+
+1. Click the **pencil icon** on a user row to view user details
+2. Click **"Edit User"** to enter edit mode
+3. Available modifications:
+   - **Username** - Rename the user (warning: user must login with new name)
+   - **Admin status** - Grant or revoke admin privileges
+   - **Groups** - Assign user to groups
+4. Click **"Save Changes"**
+
+### Set Password
+
+1. Click the **key icon** on a user row
+2. Enter new password, or click **"Generate"** for a random password
+3. (Optional) Check **"Force password change on next login"**
+4. Click **"Set Password"**
+5. After success, copy the password to share with the user
+
+<!-- TODO: Add screenshot of Set Password modal -->
+<!-- ![Set Password Modal](./images/user-3-password-modal.png) -->
+
+### Server Control
+
+- **Stop**: Click the red stop button to stop a user's running server
+- **Start**: Click the green play button to start a user's server
+
+### Batch Operations
+
+1. Select multiple users using checkboxes
+2. Available batch actions:
+   - **Start All Selected** - Start servers for selected users
+   - **Stop All Selected** - Stop servers for selected users
+   - **Set Quota** - Set quota for selected users (see [Quota System](./quota-system.md))
+
+<!-- TODO: Add screenshot of batch operations with multiple users selected -->
+<!-- ![Batch Operations](./images/user-4-batch-operations.png) -->
+
+### Search and Filter
+
+- Use the search box to filter users by username
+- Toggle "Only Active Servers" to show only users with running servers
+- Click column headers to sort by that column
+
+### Manage Groups
+
+Click **"Manage Groups"** to navigate to the group management page.
 
 ## Script Usage
 
@@ -138,6 +216,8 @@ python scripts/manage_users.py set-admin --revoke -f demote_list.csv
 ### 4. Set Passwords
 
 Set default passwords for users (requires kubectl access).
+
+> **Note:** For quota management commands (`set-quota`, `add-quota`, `list-quota`), see the [User Quota System](./quota-system.md) documentation.
 
 ```bash
 # Set passwords from file with password column

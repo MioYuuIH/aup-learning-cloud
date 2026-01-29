@@ -19,9 +19,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Form, InputGroup, Badge, Spinner, Alert, ButtonGroup } from 'react-bootstrap';
+import { Table, Button, Form, InputGroup, Badge, Spinner, Alert, ButtonGroup, Modal } from 'react-bootstrap';
 import type { User } from '../types';
 import * as api from '../api/client';
+import type { UserQuota } from '../api/client';
 import { CreateUserModal } from '../components/CreateUserModal';
 import { SetPasswordModal } from '../components/SetPasswordModal';
 import { EditUserModal } from '../components/EditUserModal';
@@ -41,9 +42,17 @@ export function UserList() {
   const [onlyActiveServers, setOnlyActiveServers] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [quotaMap, setQuotaMap] = useState<Map<string, UserQuota>>(new Map());
+  const [quotaEnabled, setQuotaEnabled] = useState(false);
+  const [editingQuota, setEditingQuota] = useState<string | null>(null);
+  const [quotaInput, setQuotaInput] = useState('');
+  const [showBatchQuotaModal, setShowBatchQuotaModal] = useState(false);
+  const [batchQuotaInput, setBatchQuotaInput] = useState('100');
+  const [sortColumn, setSortColumn] = useState<'name' | 'admin' | 'quota' | 'server' | 'lastActivity'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  const jhdata = (window as any).jhdata || {};
-  const baseUrl = jhdata.base_url || '/hub/';
+  const jhdata = window.jhdata ?? {};
+  const baseUrl = jhdata.base_url ?? '/hub/';
 
   const loadUsers = useCallback(async () => {
     try {
@@ -58,9 +67,97 @@ export function UserList() {
     }
   }, []);
 
+  const loadQuota = useCallback(async () => {
+    try {
+      const quotaData = await api.getAllQuota();
+      const map = new Map<string, UserQuota>();
+      for (const q of quotaData.users) {
+        map.set(q.username, q);
+      }
+      setQuotaMap(map);
+      setQuotaEnabled(true);
+    } catch {
+      // Quota system might be disabled
+      setQuotaEnabled(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadUsers();
-  }, [loadUsers]);
+    loadQuota();
+  }, [loadUsers, loadQuota]);
+
+  const handleQuotaEdit = (username: string, currentBalance: number, isUnlimited: boolean) => {
+    setEditingQuota(username);
+    setQuotaInput(isUnlimited ? '∞' : currentBalance.toString());
+  };
+
+  const handleQuotaSave = async (username: string) => {
+    try {
+      setActionLoading(`quota-${username}`);
+      const input = quotaInput.trim();
+
+      // Check if user wants unlimited quota (input is -1 or ∞)
+      if (input === '-1' || input === '∞' || input.toLowerCase() === 'unlimited') {
+        await api.setUserUnlimited(username, true);
+      } else {
+        // First revoke unlimited if it was set, then set the amount
+        const currentQuota = quotaMap.get(username);
+        if (currentQuota?.unlimited) {
+          await api.setUserUnlimited(username, false);
+        }
+        await api.setUserQuota(username, parseInt(input) || 0, 'set');
+      }
+      await loadQuota();
+      setEditingQuota(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update quota');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleQuotaCancel = () => {
+    setEditingQuota(null);
+    setQuotaInput('');
+  };
+
+  const handleBatchQuotaSave = async () => {
+    if (selectedUsers.size === 0) {
+      setError('Please select users first');
+      return;
+    }
+
+    try {
+      setActionLoading('batch-quota');
+      const input = batchQuotaInput.trim();
+      const isUnlimited = input === '-1' || input === '∞' || input.toLowerCase() === 'unlimited';
+
+      for (const username of selectedUsers) {
+        try {
+          if (isUnlimited) {
+            await api.setUserUnlimited(username, true);
+          } else {
+            const currentQuota = quotaMap.get(username);
+            if (currentQuota?.unlimited) {
+              await api.setUserUnlimited(username, false);
+            }
+            await api.setUserQuota(username, parseInt(input) || 0, 'set');
+          }
+        } catch (err) {
+          console.error(`Failed to set quota for ${username}:`, err);
+        }
+      }
+
+      await loadQuota();
+      setShowBatchQuotaModal(false);
+      setSelectedUsers(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to batch update quota');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(search.toLowerCase());
@@ -68,10 +165,55 @@ export function UserList() {
     return matchesSearch && matchesActiveFilter;
   });
 
-  // Pagination
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  // Sorting
+  const handleSort = (column: typeof sortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1); // Reset to first page when sorting changes
+  };
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    let comparison = 0;
+    switch (sortColumn) {
+      case 'name':
+        comparison = a.name.localeCompare(b.name);
+        break;
+      case 'admin':
+        comparison = (a.admin ? 1 : 0) - (b.admin ? 1 : 0);
+        break;
+      case 'quota': {
+        const quotaA = quotaMap.get(a.name)?.balance ?? 0;
+        const quotaB = quotaMap.get(b.name)?.balance ?? 0;
+        comparison = quotaA - quotaB;
+        break;
+      }
+      case 'server':
+        comparison = (a.server ? 1 : 0) - (b.server ? 1 : 0);
+        break;
+      case 'lastActivity': {
+        const dateA = a.last_activity ? new Date(a.last_activity).getTime() : 0;
+        const dateB = b.last_activity ? new Date(b.last_activity).getTime() : 0;
+        comparison = dateA - dateB;
+        break;
+      }
+    }
+    return sortDirection === 'asc' ? comparison : -comparison;
+  });
+
+  // Pagination (use sortedUsers)
+  const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedUsers = filteredUsers.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedUsers = sortedUsers.slice(startIndex, startIndex + itemsPerPage);
+
+  // Sort indicator helper
+  const SortIcon = ({ column }: { column: typeof sortColumn }) => {
+    if (sortColumn !== column) return <span style={{ opacity: 0.3 }}> ↕</span>;
+    return <span> {sortDirection === 'asc' ? '↑' : '↓'}</span>;
+  };
 
   // Filter out GitHub users for password operations
   const isNativeUser = (user: User) => !user.name.startsWith('github:');
@@ -225,6 +367,16 @@ export function UserList() {
           >
             {actionLoading === 'stop-all' ? <Spinner animation="border" size="sm" /> : 'Stop All'}
           </Button>
+          {quotaEnabled && (
+            <Button
+              variant="info"
+              onClick={() => setShowBatchQuotaModal(true)}
+              disabled={selectedUsers.size === 0}
+              title={selectedUsers.size === 0 ? 'Select users first' : `Set quota for ${selectedUsers.size} users`}
+            >
+              Set Quota ({selectedUsers.size})
+            </Button>
+          )}
           <Button
             variant="danger"
             onClick={handleShutdownHub}
@@ -297,10 +449,23 @@ export function UserList() {
                 onChange={toggleSelectAll}
               />
             </th>
-            <th>User</th>
-            <th>Admin</th>
-            <th>Server</th>
-            <th>Last Activity</th>
+            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('name')}>
+              User<SortIcon column="name" />
+            </th>
+            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('admin')}>
+              Admin<SortIcon column="admin" />
+            </th>
+            {quotaEnabled && (
+              <th style={{ width: '120px', cursor: 'pointer' }} onClick={() => handleSort('quota')}>
+                Quota<SortIcon column="quota" />
+              </th>
+            )}
+            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('server')}>
+              Server<SortIcon column="server" />
+            </th>
+            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('lastActivity')}>
+              Last Activity<SortIcon column="lastActivity" />
+            </th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -327,6 +492,53 @@ export function UserList() {
                   <Badge bg="secondary">User</Badge>
                 )}
               </td>
+              {quotaEnabled && (
+                <td>
+                  {editingQuota === user.name ? (
+                    <InputGroup size="sm" style={{ width: '100px' }}>
+                      <Form.Control
+                        type="text"
+                        value={quotaInput}
+                        placeholder="∞ for unlimited"
+                        onChange={(e) => setQuotaInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleQuotaSave(user.name);
+                          if (e.key === 'Escape') handleQuotaCancel();
+                        }}
+                        autoFocus
+                      />
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => handleQuotaSave(user.name)}
+                        disabled={actionLoading === `quota-${user.name}`}
+                      >
+                        {actionLoading === `quota-${user.name}` ? <Spinner animation="border" size="sm" /> : '✓'}
+                      </Button>
+                    </InputGroup>
+                  ) : (
+                    <span
+                      style={{
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        color: quotaMap.get(user.name)?.unlimited
+                          ? '#198754'  // green for unlimited
+                          : (quotaMap.get(user.name)?.balance ?? 0) < 10
+                            ? '#dc3545'  // red for low
+                            : '#333',  // dark for normal
+                      }}
+                      onClick={() => handleQuotaEdit(user.name, quotaMap.get(user.name)?.balance ?? 0, quotaMap.get(user.name)?.unlimited === true)}
+                      title="Click to edit (-1 or ∞ for unlimited)"
+                    >
+                      {quotaMap.get(user.name)?.unlimited ? (
+                        '∞'
+                      ) : (
+                        quotaMap.get(user.name)?.balance ?? 0
+                      )}
+                    </span>
+                  )}
+                </td>
+              )}
               <td>{getServerStatus(user)}</td>
               <td>{formatDate(user.last_activity)}</td>
               <td>
@@ -462,6 +674,53 @@ export function UserList() {
         }}
         onUpdate={loadUsers}
       />
+
+      {/* Batch Quota Modal */}
+      <Modal show={showBatchQuotaModal} onHide={() => setShowBatchQuotaModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Batch Set Quota</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Set quota for <strong>{selectedUsers.size}</strong> selected user(s):</p>
+          <ul style={{ maxHeight: '150px', overflowY: 'auto', fontSize: '0.9em' }}>
+            {Array.from(selectedUsers).slice(0, 10).map(u => (
+              <li key={u}>{u}</li>
+            ))}
+            {selectedUsers.size > 10 && <li>...and {selectedUsers.size - 10} more</li>}
+          </ul>
+          <Form.Group className="mt-3">
+            <Form.Label>Quota Value</Form.Label>
+            <Form.Control
+              type="text"
+              value={batchQuotaInput}
+              onChange={(e) => setBatchQuotaInput(e.target.value)}
+              placeholder="Enter number or ∞ for unlimited"
+            />
+            <Form.Text className="text-muted">
+              Enter a number, or use <code>-1</code> / <code>∞</code> / <code>unlimited</code> for unlimited quota.
+            </Form.Text>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowBatchQuotaModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleBatchQuotaSave}
+            disabled={actionLoading === 'batch-quota'}
+          >
+            {actionLoading === 'batch-quota' ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Saving...
+              </>
+            ) : (
+              `Set Quota for ${selectedUsers.size} Users`
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
