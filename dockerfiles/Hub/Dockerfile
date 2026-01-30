@@ -59,7 +59,7 @@ COPY --from=admin-ui-builder /app/dist/ /usr/local/share/jupyterhub/static/admin
 RUN chown -R 1000:1000 /usr/local/share/jupyterhub/static/admin-ui/
 
 # Install Python packages as root
-RUN pip install jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator
+RUN pip install jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic
 
 # Switch back to jovyan user
 USER jovyan

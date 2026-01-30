@@ -27,21 +27,38 @@ import sys
 
 configuration_directory = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, configuration_directory)
+# Also add the config subdirectory where additional modules are mounted
+config_subdir = os.path.join(configuration_directory, "config")
+if os.path.isdir(config_subdir):
+    sys.path.insert(0, config_subdir)
 
 import asyncio
+import contextlib
 import datetime
 import glob
 import json
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import aiohttp
+
+# Type stub for traitlets' magic get_config() function (injected at runtime)
+if TYPE_CHECKING:
+    from traitlets.config import Config
+
+    def get_config() -> Config: ...
+
+
 import jwt
 from firstuseauthenticator import FirstUseAuthenticator
+from jupyterhub.apihandlers import APIHandler
 from jupyterhub.auth import Authenticator
 from jupyterhub.handlers import BaseHandler
+from jupyterhub.user import User as JupyterHubUser
 from jupyterhub.utils import url_path_join
+
+
 from kubernetes_asyncio import client
 from kubespawner import KubeSpawner
 from multiauthenticator import MultiAuthenticator
@@ -49,16 +66,47 @@ from oauthenticator.github import GitHubOAuthenticator
 from tornado import web
 from tornado.httpclient import AsyncHTTPClient
 
+# Pydantic validation models for Quota API
+from pydantic import ValidationError
+
+from quota_models import (
+    BatchQuotaRequest,
+    QuotaAction,
+    QuotaModifyRequest,
+    QuotaRefreshRequest,
+)
+
 # z2jh utilities for reading Helm chart values
 # Note: z2jh's get_config(key) is renamed to z2jh_get_config to avoid conflict with
 # JupyterHub's magic get_config() function (see below)
 from z2jh import (
-    get_config as z2jh_get_config,
+    get_config as _z2jh_get_config_untyped,
     get_name,
     get_name_env,
     get_secret_value,
     set_config_if_not_none,
 )
+
+# Type-safe wrappers for z2jh_get_config with proper return types
+T = TypeVar("T")
+
+
+def z2jh_get_config(key: str, default: T | None = None) -> T | Any:
+    """Get configuration value from Helm chart values.yaml with type hint support."""
+    return _z2jh_get_config_untyped(key, default)
+
+
+def z2jh_get_config_list(key: str, default: list[Any] | None = None) -> list[Any]:
+    """Get list configuration value, returns empty list if None."""
+    result = _z2jh_get_config_untyped(key, default)
+    return result if isinstance(result, list) else (default or [])
+
+
+def z2jh_get_config_dict(key: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Get dict configuration value, returns empty dict if None."""
+    result = _z2jh_get_config_untyped(key, default)
+    return result if isinstance(result, dict) else (default or {})
+
 
 # JupyterHub magic function: get_config()
 # This is injected by traitlets at runtime, NOT imported from any module.
@@ -101,21 +149,54 @@ RESOURCE_REQUIREMENTS = {
     "none": {"cpu": "2", "memory": "4Gi", "memory_limit": "6Gi"},
 }
 
-# NODE_SELECTOR_MAPPING
-# recall https://github.com/AMDResearch/ryzen-aipc-cluster/tree/main/k8s, you should tag the nodes to
-# do resource allocation.
-NODE_SELECTOR_MAPPING = {
-    # GPU nodes
-    "strix": {"node-type": "strix"},
-    "strix-halo": {"node-type": "strix-halo"},
-    "dgpu": {"node-type": "dgpu"},
-    # NPU nodes (Note: NPU's strix uses different labels)
-    "strix-npu": {"type": "strix"},
+# ACCELERATOR_OPTIONS
+# Centralized accelerator configuration from values.yaml
+# Config: custom.accelerators (dict)
+_default_accelerators: dict[str, dict] = {
+    # GPU accelerators
+    "phx": {
+        "displayName": "AMD Radeon™ 780M (Phoenix Point iGPU)",
+        "description": "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X",
+        "nodeSelector": {"node-type": "phx"},
+        "env": {"HSA_OVERRIDE_GFX_VERSION": "11.0.0"},
+        "quotaRate": 2,
+    },
+    "strix": {
+        "displayName": "AMD Radeon™ 890M (Strix Point iGPU)",
+        "description": "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X",
+        "nodeSelector": {"node-type": "strix"},
+        "env": {},
+        "quotaRate": 2,
+    },
+    "strix-halo": {
+        "displayName": "AMD Radeon™ 8060S (Strix Halo iGPU)",
+        "description": "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X",
+        "nodeSelector": {"node-type": "strix-halo"},
+        "env": {},
+        "quotaRate": 3,
+    },
+    "dgpu": {
+        "displayName": "AMD Radeon™ 9070XT (Desktop GPU)",
+        "description": "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6",
+        "nodeSelector": {"node-type": "dgpu"},
+        "env": {},
+        "quotaRate": 4,
+    },
+    # NPU accelerators
+    "strix-npu": {
+        "displayName": "AMD XDNA2 (Strix Point NPU)",
+        "description": "AMD XDNA2 NPU with AI acceleration",
+        "nodeSelector": {"type": "strix"},
+        "env": {},
+        "quotaRate": 1,
+    },
 }
+_accelerators_config = z2jh_get_config_dict("custom.accelerators", None)
+ACCELERATOR_OPTIONS: dict[str, dict] = _accelerators_config if _accelerators_config else _default_accelerators
 
-# ENVIRONMENT_MAPPING
-# Here set up the basic environment value of singleuser image when it boot up.
-ENVIRONMENT_MAPPING = {"phx": {}, "strix": {}, "dgpu": {}, "strix-npu": {}}
+# Build NODE_SELECTOR_MAPPING and ENVIRONMENT_MAPPING from ACCELERATOR_OPTIONS
+NODE_SELECTOR_MAPPING = {key: opt.get("nodeSelector", {}) for key, opt in ACCELERATOR_OPTIONS.items()}
+ENVIRONMENT_MAPPING = {key: opt.get("env", {}) for key, opt in ACCELERATOR_OPTIONS.items()}
 
 # NPU Security Config
 # This is the special NPU security config to enable `sudo` when using NPU inside docker.
@@ -141,13 +222,55 @@ TEAM_RESOURCE_MAPPING = {
     "native-users": ["Course-CV", "Course-DL", "Course-LLM"],
 }
 
-# Here are some example user and password configs for LocalAccount.
+# ----- QUOTA RATES -----
+# ============================================================================
+# Quota System Configuration
+# These can be overridden via environment variables in values.yaml
+# ============================================================================
 
-AUP_USERS = [f"AUP{i:02d}" for i in range(1, 51)]
-TEST_USERS = [f"TEST{i:02d}" for i in range(1, 51)]
-AUP_PASSWORD = "AUP"  # AUP userpassword
-TEST_PASSWORD = "TEST"  # TEST userpassword
-ADMIN_PASSWORD = "AUP"
+# Enable/disable quota system
+# Config: custom.quota.enabled (true/false)
+# Automatically disabled in auto-login and dummy modes (single-node development)
+_auth_mode = z2jh_get_config("custom.authMode", "auto-login")
+_quota_config = z2jh_get_config("custom.quota.enabled", None)
+if _quota_config is not None:
+    QUOTA_ENABLED = bool(_quota_config)
+else:
+    # Default: disabled for auto-login/dummy, enabled for github/multi
+    QUOTA_ENABLED = _auth_mode not in ("auto-login", "dummy")
+print(f"[CONFIG] Quota system: {'enabled' if QUOTA_ENABLED else 'disabled'} (auth_mode={_auth_mode})")
+
+# Quota rates derived from ACCELERATOR_OPTIONS
+# Each accelerator has a quotaRate field; CPU-only uses custom.quota.cpuRate
+QUOTA_CPU_RATE = int(z2jh_get_config("custom.quota.cpuRate", 1))
+QUOTA_RATES: dict[str, int] = {"cpu": QUOTA_CPU_RATE}
+for key, opt in ACCELERATOR_OPTIONS.items():
+    QUOTA_RATES[key] = int(opt.get("quotaRate", 1))
+
+# Default rate for unknown accelerator types
+DEFAULT_QUOTA_RATE = QUOTA_CPU_RATE
+
+
+def get_quota_rate(accelerator_type: str | None) -> int:
+    """Get quota rate based on accelerator type (gpu_selection)."""
+    if not accelerator_type:
+        return DEFAULT_QUOTA_RATE
+    return QUOTA_RATES.get(accelerator_type, DEFAULT_QUOTA_RATE)
+
+
+# Minimum quota required to start any container
+# Config: custom.quota.minimumToStart (int)
+MINIMUM_QUOTA_TO_START = int(z2jh_get_config("custom.quota.minimumToStart", 10))
+
+# Default quota for new users (0 = no quota granted, must be set by admin)
+# Config: custom.quota.defaultQuota (int)
+DEFAULT_QUOTA = int(z2jh_get_config("custom.quota.defaultQuota", 0))
+
+if QUOTA_ENABLED:
+    print(f"[CONFIG] Quota rates by accelerator: {QUOTA_RATES}")
+    print(f"[CONFIG] Quota minimum to start: {MINIMUM_QUOTA_TO_START}")
+    print(f"[CONFIG] Quota default for new users: {DEFAULT_QUOTA}")
+
 LOCAL_ACCOUNT_PREFIX = "LocalAccount"
 LOCAL_ACCOUNT_PREFIX_UPPER = LOCAL_ACCOUNT_PREFIX.upper()
 
@@ -229,6 +352,8 @@ class RemoteLabAuthenticator(Authenticator):
     """
 
     async def authenticate(self, handler, data=None):
+        if data is None:
+            raise web.HTTPError(400, "No authentication data provided")
         token = data["password"]
         jwt_data = self._decode_jwt(token, handler)
 
@@ -296,24 +421,6 @@ class CustomMultiAuthenticator(MultiAuthenticator):
         return "\n".join(html)
 
 
-# LocalAccountAuthenticator
-# Match the username to the group, all users in the same group can access the same resources.
-# all users in the same group share same password.
-class SimpleGroupAuthenticator(Authenticator):
-    service_name = LOCAL_ACCOUNT_PREFIX
-
-    async def authenticate(self, handler, data):
-        username = data["username"].strip()
-        password = data["password"].strip()
-
-        if username in AUP_USERS and password == AUP_PASSWORD:
-            return {"name": f"{username}", "group": "AUP"}
-        elif username in TEST_USERS and password == TEST_PASSWORD:
-            return {"name": f"{username}", "group": "TEST"}
-        else:
-            return None
-
-
 # AutoLoginAuthenticator
 # For single-node deployments - automatically logs in users without credentials
 class AutoLoginAuthenticator(Authenticator):
@@ -352,7 +459,7 @@ class AutoLoginAuthenticator(Authenticator):
                 # Redirect to user's server (spawn page)
                 next_url = self.get_argument("next", "")
                 if not next_url:
-                    next_url = self.hub.server_url(user, "")
+                    next_url = getattr(user, "url", None) or url_path_join(self.hub.base_url, "spawn")
 
                 self.log.info(f"Auto-login: user '{username}' authenticated, redirecting to {next_url}")
                 self.redirect(next_url)
@@ -384,14 +491,13 @@ class CustomGitHubOAuthenticator(GitHubOAuthenticator):
 
 
 # Password change handler for FirstUseAuthenticator
-
-
 class CheckForcePasswordChangeHandler(BaseHandler):
     """API endpoint to check if user needs to change password"""
 
     @web.authenticated
     async def get(self):
         """Check if user needs forced password change"""
+        assert self.current_user is not None
         user = self.current_user
         username = user.name
 
@@ -401,7 +507,7 @@ class CheckForcePasswordChangeHandler(BaseHandler):
 
         # Check if user needs forced password change
         needs_change = False
-        if hasattr(self.authenticator, "_authenticators"):
+        if isinstance(self.authenticator, MultiAuthenticator):
             for authenticator in self.authenticator._authenticators:
                 if isinstance(authenticator, CustomFirstUseAuthenticator):
                     needs_change = authenticator.needs_password_change(username)
@@ -417,8 +523,9 @@ class ChangePasswordHandler(BaseHandler):
     @web.authenticated
     async def get(self):
         """Show password change form"""
-        password_changed = self.get_argument("password_changed", default=False)
-        forced = self.get_argument("forced", default=False)
+        assert self.current_user is not None
+        password_changed = self.get_argument("password_changed", default="") != ""
+        forced = self.get_argument("forced", default="") != ""
 
         # Check if this is a forced password change
         user = self.current_user
@@ -427,7 +534,7 @@ class ChangePasswordHandler(BaseHandler):
             username = username.split(":", 1)[1]
 
         is_forced = False
-        if hasattr(self.authenticator, "_authenticators"):
+        if isinstance(self.authenticator, MultiAuthenticator):
             for authenticator in self.authenticator._authenticators:
                 if isinstance(authenticator, CustomFirstUseAuthenticator):
                     is_forced = authenticator.needs_password_change(username)
@@ -441,6 +548,7 @@ class ChangePasswordHandler(BaseHandler):
     @web.authenticated
     async def post(self):
         """Process password change"""
+        assert self.current_user is not None
         user = self.current_user
         current_password = self.get_body_argument("current_password", default=None)
         new_password = self.get_body_argument("new_password", default=None)
@@ -462,7 +570,7 @@ class ChangePasswordHandler(BaseHandler):
 
         # Get FirstUseAuthenticator instance from MultiAuthenticator
         firstuse_auth = None
-        if hasattr(self.authenticator, "_authenticators"):
+        if isinstance(self.authenticator, MultiAuthenticator):
             for authenticator in self.authenticator._authenticators:
                 if isinstance(authenticator, CustomFirstUseAuthenticator):
                     firstuse_auth = authenticator
@@ -497,12 +605,13 @@ class AdminResetPasswordHandler(BaseHandler):
     @web.authenticated
     async def get(self):
         """Show admin password reset form"""
+        assert self.current_user is not None
         if not self.current_user.admin:
             self.set_status(403)
             return self.finish("Admin access required")
 
         target_user = self.get_argument("user", default="")
-        success = self.get_argument("success", default=False)
+        success = self.get_argument("success", default="") != ""
         error = self.get_argument("error", default="")
 
         # Get list of native users
@@ -525,6 +634,7 @@ class AdminResetPasswordHandler(BaseHandler):
     @web.authenticated
     async def post(self):
         """Process admin password reset"""
+        assert self.current_user is not None
         if not self.current_user.admin:
             self.set_status(403)
             return self.finish("Admin access required")
@@ -534,7 +644,7 @@ class AdminResetPasswordHandler(BaseHandler):
         confirm_password = self.get_body_argument("confirm_password", default=None)
         force_change = self.get_body_argument("force_change", default="on") == "on"
 
-        if not all([target_user, new_password, confirm_password]):
+        if not target_user or not new_password or not confirm_password:
             return self.redirect(self.hub.base_url + "admin/reset-password?error=All+fields+are+required")
 
         if new_password != confirm_password:
@@ -550,7 +660,7 @@ class AdminResetPasswordHandler(BaseHandler):
             )
 
         firstuse_auth = None
-        if hasattr(self.authenticator, "_authenticators"):
+        if isinstance(self.authenticator, MultiAuthenticator):
             for authenticator in self.authenticator._authenticators:
                 if isinstance(authenticator, CustomFirstUseAuthenticator):
                     firstuse_auth = authenticator
@@ -586,6 +696,7 @@ class AdminUIHandler(BaseHandler):
     @web.authenticated
     async def get(self):
         """Serve admin UI page"""
+        assert self.current_user is not None
         if not self.current_user.admin:
             self.set_status(403)
             return self.finish("Admin access required")
@@ -594,16 +705,13 @@ class AdminUIHandler(BaseHandler):
         self.finish(html)
 
 
-class AdminAPISetPasswordHandler(BaseHandler):
+class AdminAPISetPasswordHandler(APIHandler):
     """API endpoint for setting user passwords"""
-
-    def check_xsrf_cookie(self):
-        """Allow API calls with proper authentication"""
-        pass
 
     @web.authenticated
     async def post(self):
         """Set password for a user"""
+        assert self.current_user is not None
         if not self.current_user.admin:
             self.set_status(403)
             self.set_header("Content-Type", "application/json")
@@ -626,7 +734,7 @@ class AdminAPISetPasswordHandler(BaseHandler):
                 return self.finish(json.dumps({"error": "Cannot set password for GitHub users"}))
 
             firstuse_auth = None
-            if hasattr(self.authenticator, "_authenticators"):
+            if isinstance(self.authenticator, MultiAuthenticator):
                 for authenticator in self.authenticator._authenticators:
                     if isinstance(authenticator, CustomFirstUseAuthenticator):
                         firstuse_auth = authenticator
@@ -655,15 +763,17 @@ class AdminAPISetPasswordHandler(BaseHandler):
             self.log.error(f"Failed to set password: {e}")
             self.set_status(500)
             self.set_header("Content-Type", "application/json")
-            self.finish(json.dumps({"error": str(e)}))
+            # Don't expose internal error details to client
+            self.finish(json.dumps({"error": "Failed to set password"}))
 
 
-class AdminAPIGeneratePasswordHandler(BaseHandler):
+class AdminAPIGeneratePasswordHandler(APIHandler):
     """API endpoint for generating random passwords"""
 
     @web.authenticated
     async def get(self):
         """Generate a random password"""
+        assert self.current_user is not None
         if not self.current_user.admin:
             self.set_status(403)
             self.set_header("Content-Type", "application/json")
@@ -678,6 +788,310 @@ class AdminAPIGeneratePasswordHandler(BaseHandler):
 
         self.set_header("Content-Type", "application/json")
         self.finish(json.dumps({"password": password}))
+
+
+# ============ Quota Management API Handlers ============
+
+
+class QuotaAPIHandler(APIHandler):
+    """API endpoint for managing user quota."""
+
+    @web.authenticated
+    async def get(self, username=None):
+        """Get quota balance."""
+        assert self.current_user is not None
+        from quota_manager import get_quota_manager
+
+        if username:
+            # Get specific user (admin only or self)
+            if not self.current_user.admin and self.current_user.name.lower() != username.lower():
+                self.set_status(403)
+                self.set_header("Content-Type", "application/json")
+                return self.finish(json.dumps({"error": "Access denied"}))
+
+            quota_manager = get_quota_manager()
+            balance = quota_manager.get_balance(username)
+            unlimited = quota_manager.is_unlimited_in_db(username)
+            transactions = quota_manager.get_user_transactions(username, 20)
+
+            self.set_header("Content-Type", "application/json")
+            self.finish(
+                json.dumps(
+                    {
+                        "username": username,
+                        "balance": balance,
+                        "unlimited": unlimited,
+                        "recent_transactions": transactions,
+                    }
+                )
+            )
+        else:
+            # List all users (admin only)
+            if not self.current_user.admin:
+                self.set_status(403)
+                self.set_header("Content-Type", "application/json")
+                return self.finish(json.dumps({"error": "Admin access required"}))
+
+            quota_manager = get_quota_manager()
+            balances = quota_manager.get_all_balances()
+
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"users": balances}))
+
+    @web.authenticated
+    async def post(self, username=None):
+        """Set or add quota (admin only)."""
+        assert self.current_user is not None
+        if not self.current_user.admin:
+            self.set_status(403)
+            self.set_header("Content-Type", "application/json")
+            return self.finish(json.dumps({"error": "Admin access required"}))
+
+        from quota_manager import get_quota_manager
+
+        try:
+            data = json.loads(self.request.body.decode("utf-8"))
+
+            # Validate with Pydantic
+            try:
+                req = QuotaModifyRequest(**data)
+            except ValidationError as ve:
+                self.set_status(400)
+                self.set_header("Content-Type", "application/json")
+                errors = [{"field": e["loc"][0] if e["loc"] else "request", "message": e["msg"]} for e in ve.errors()]
+                return self.finish(json.dumps({"error": "Validation failed", "details": errors}))
+
+            if not username:
+                self.set_status(400)
+                self.set_header("Content-Type", "application/json")
+                return self.finish(json.dumps({"error": "Username required"}))
+
+            quota_manager = get_quota_manager()
+            admin_name = self.current_user.name
+
+            if req.action == QuotaAction.SET:
+                assert req.amount is not None
+                new_balance = quota_manager.set_balance(username, req.amount, admin_name)
+            elif req.action == QuotaAction.ADD:
+                assert req.amount is not None
+                new_balance = quota_manager.add_quota(username, req.amount, admin_name, req.description)
+            elif req.action == QuotaAction.DEDUCT:
+                assert req.amount is not None
+                success, new_balance = quota_manager.deduct_quota(username, req.amount, description=req.description)
+                if not success:
+                    self.set_status(400)
+                    self.set_header("Content-Type", "application/json")
+                    return self.finish(json.dumps({"error": "Insufficient balance"}))
+            elif req.action == QuotaAction.SET_UNLIMITED:
+                assert req.unlimited is not None
+                quota_manager.set_unlimited(username, req.unlimited, admin_name)
+                new_balance = quota_manager.get_balance(username)
+                self.set_header("Content-Type", "application/json")
+                return self.finish(
+                    json.dumps(
+                        {
+                            "username": username,
+                            "balance": new_balance,
+                            "unlimited": req.unlimited,
+                            "action": req.action.value,
+                        }
+                    )
+                )
+
+            self.set_header("Content-Type", "application/json")
+            self.finish(
+                json.dumps(
+                    {
+                        "username": username,
+                        "balance": new_balance,
+                        "action": req.action.value,
+                        "amount": req.amount,
+                    }
+                )
+            )
+
+        except json.JSONDecodeError:
+            self.set_status(400)
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"error": "Invalid JSON"}))
+        except Exception as e:
+            self.log.error(f"Quota API error: {e}")
+            self.set_status(500)
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"error": "Internal server error"}))
+
+
+class QuotaBatchAPIHandler(APIHandler):
+    """API endpoint for batch quota operations."""
+
+    @web.authenticated
+    async def post(self):
+        """Batch set quota for multiple users."""
+        assert self.current_user is not None
+        if not self.current_user.admin:
+            self.set_status(403)
+            self.set_header("Content-Type", "application/json")
+            return self.finish(json.dumps({"error": "Admin access required"}))
+
+        from quota_manager import get_quota_manager
+
+        try:
+            data = json.loads(self.request.body.decode("utf-8"))
+
+            # Validate with Pydantic
+            try:
+                req = BatchQuotaRequest(**data)
+            except ValidationError as ve:
+                self.set_status(400)
+                self.set_header("Content-Type", "application/json")
+                errors = [{"field": str(e["loc"]), "message": e["msg"]} for e in ve.errors()]
+                return self.finish(json.dumps({"error": "Validation failed", "details": errors}))
+
+            quota_manager = get_quota_manager()
+            admin_name = self.current_user.name
+
+            results = {"success": 0, "failed": 0, "details": []}
+
+            for user in req.users:
+                try:
+                    quota_manager.set_balance(user.username, user.amount, admin_name)
+                    results["success"] += 1
+                    results["details"].append({"username": user.username, "status": "success", "balance": user.amount})
+                except Exception:
+                    results["failed"] += 1
+                    results["details"].append(
+                        {"username": user.username, "status": "failed", "error": "Processing error"}
+                    )
+
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps(results))
+
+        except json.JSONDecodeError:
+            self.set_status(400)
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"error": "Invalid JSON"}))
+        except Exception as e:
+            self.log.error(f"Batch quota API error: {e}")
+            self.set_status(500)
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"error": "Internal server error"}))
+
+
+class AcceleratorsAPIHandler(APIHandler):
+    """API endpoint for available accelerator options."""
+
+    @web.authenticated
+    async def get(self):
+        """Get available accelerator options."""
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps({"accelerators": ACCELERATOR_OPTIONS}))
+
+
+class QuotaRatesAPIHandler(APIHandler):
+    """API endpoint for quota rates configuration."""
+
+    @web.authenticated
+    async def get(self):
+        """Get quota rates and configuration."""
+        self.set_header("Content-Type", "application/json")
+        self.finish(
+            json.dumps(
+                {
+                    "enabled": QUOTA_ENABLED,
+                    "rates": QUOTA_RATES,
+                    "minimum_to_start": MINIMUM_QUOTA_TO_START,
+                }
+            )
+        )
+
+
+class UserQuotaInfoHandler(APIHandler):
+    """API endpoint for current user's quota info (non-admin)."""
+
+    @web.authenticated
+    async def get(self):
+        """Get current user's quota balance and rates."""
+        assert self.current_user is not None
+        from quota_manager import get_quota_manager
+
+        username = self.current_user.name
+        quota_manager = get_quota_manager()
+        balance = quota_manager.get_balance(username)
+
+        # Check if user has unlimited quota
+        has_unlimited = quota_manager.is_unlimited_in_db(username)
+
+        self.set_header("Content-Type", "application/json")
+        self.finish(
+            json.dumps(
+                {
+                    "username": username,
+                    "balance": balance,
+                    "unlimited": has_unlimited,
+                    "rates": QUOTA_RATES,
+                    "enabled": QUOTA_ENABLED,
+                }
+            )
+        )
+
+
+class QuotaRefreshHandler(APIHandler):
+    """API endpoint for batch quota refresh (called by CronJob or admin)."""
+
+    @web.authenticated
+    async def post(self):
+        """Refresh quota for all eligible users based on targeting rules."""
+        assert self.current_user is not None
+        # Use getattr for safe admin check (handles both User and Service objects)
+        is_admin = getattr(self.current_user, "admin", False)
+        if not is_admin:
+            self.set_status(403)
+            self.set_header("Content-Type", "application/json")
+            user_info = f"name={getattr(self.current_user, 'name', 'unknown')}, admin={is_admin}"
+            self.log.warning(f"[QUOTA] Refresh 403: {user_info}")
+            return self.finish(json.dumps({"error": "Admin access required"}))
+
+        from quota_manager import get_quota_manager
+
+        try:
+            data = json.loads(self.request.body.decode("utf-8"))
+
+            # Validate with Pydantic
+            try:
+                req = QuotaRefreshRequest(**data)
+            except ValidationError as ve:
+                self.set_status(400)
+                self.set_header("Content-Type", "application/json")
+                errors = [{"field": str(e["loc"]), "message": e["msg"]} for e in ve.errors()]
+                return self.finish(json.dumps({"error": "Validation failed", "details": errors}))
+
+            self.log.info(
+                f"[QUOTA] Refresh triggered: rule={req.rule_name}, action={req.action.value}, amount={req.amount}"
+            )
+
+            quota_manager = get_quota_manager()
+            result = quota_manager.batch_refresh_quota(
+                amount=req.amount,
+                action=req.action.value,
+                max_balance=req.max_balance,
+                min_balance=req.min_balance,
+                targets=req.targets.model_dump(exclude_none=True),
+                rule_name=req.rule_name,
+            )
+
+            self.log.info(f"[QUOTA] Refresh complete: {result}")
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps(result))
+
+        except json.JSONDecodeError:
+            self.set_status(400)
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"error": "Invalid JSON"}))
+        except Exception as e:
+            self.log.error(f"[QUOTA] Refresh error: {e}")
+            self.set_status(500)
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"error": "Internal server error"}))
 
 
 # FirstUseAuthenticator - Users set their password on first login
@@ -799,35 +1213,38 @@ class RemoteLabKubeSpawner(KubeSpawner):
     Simplified KubeSpawner, relying on frontend to provide detailed resource configuration
     """
 
+    # Type annotation to override KubeSpawner's MockObject type
+    user: JupyterHubUser  # type: ignore[assignment]
+
     async def get_user_teams(self) -> list[str]:
         """Get available resources for the user based on their GitHub team membership."""
 
         username = self.user.name.strip()
         username_upper = username.upper()
-        print(f"[DEBUG] Checking resource group for user: {username}")
+        self.log.debug(f"Checking resource group for user: {username}")
 
         # Auto-login or dummy mode: grant all resources
         if AUTH_MODE in ["auto-login", "dummy"]:
-            print(f"[DEBUG] Auth mode '{AUTH_MODE}': granting all resources")
+            self.log.debug(f"Auth mode '{AUTH_MODE}': granting all resources")
             return TEAM_RESOURCE_MAPPING["official"]
 
         # Native users (no prefix) - check by absence of "github:" prefix
         if not username.startswith("github:"):
-            print(f"[DEBUG] Native user detected: {username}")
+            self.log.debug(f"Native user detected: {username}")
             if "AUP" in username_upper:
-                print("[DEBUG] Matched AUP user group")
+                self.log.debug("Matched AUP user group")
                 return TEAM_RESOURCE_MAPPING["AUP"]
             elif "TEST" in username_upper:
-                print("[DEBUG] Matched TEST user group")
+                self.log.debug("Matched TEST user group")
                 return TEAM_RESOURCE_MAPPING["official"]
             # Default for native users
-            print("[DEBUG] Native user with default resources")
+            self.log.debug("Native user with default resources")
             return TEAM_RESOURCE_MAPPING.get("native-users", TEAM_RESOURCE_MAPPING["official"])
 
         auth_state = await self.user.get_auth_state()
         if not auth_state or "access_token" not in auth_state:
-            print(
-                "[DEBUG] No auth state or access token found, setting to NONE, check if there is a local account config error."
+            self.log.debug(
+                "No auth state or access token found, setting to NONE, check if there is a local account config error."
             )
             return ["none"]
         # Get access token from auth state
@@ -849,9 +1266,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
                         if team["organization"]["login"] == GITHUB_ORG_NAME:
                             teams.append(team["slug"])
                 else:
-                    print(f"[DEBUG] GitHub API request failed with status {resp.status}")
+                    self.log.debug(f"GitHub API request failed with status {resp.status}")
         except Exception as e:
-            print(f"[DEBUG] Error fetching teams: {e}")
+            self.log.debug(f"Error fetching teams: {e}")
 
         # Map teams to available resources
         available_resources = []
@@ -870,9 +1287,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
         if not available_resources:
             available_resources = ["none"]
             #     available_resources = TEAM_RESOURCE_MAPPING[team]
-            print("[DEBUG] No team info for this user, set to none")
+            self.log.debug("No team info for this user, set to none")
 
-        print(f"[DEBUG] User teams: {teams} Available resources: {available_resources}")
+        self.log.debug(f"User teams: {teams} Available resources: {available_resources}")
 
         return available_resources
 
@@ -880,7 +1297,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
         """Generate the HTML form for resource selection."""
         try:
             available_resource_names = await self.get_user_teams()
-            print(f"[DEBUG] Providing users with following resources: {available_resource_names}")
+            self.log.debug(f"Providing users with following resources: {available_resource_names}")
 
             # Use template path
             template_path = os.environ.get("JUPYTERHUB_TEMPLATE_PATH", "/srv/jupyterhub/templates")
@@ -891,33 +1308,32 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 with open(template_file, encoding="utf-8") as f:
                     html_content = f.read()
 
-                # Inject available resources from backend
+                # Inject available resources and config from backend
                 available_resources_js = json.dumps(available_resource_names)
+                single_node_mode_js = "true" if SINGLE_NODE_MODE else "false"
                 injection_script = f"""
 <script>
     window.AVAILABLE_RESOURCES = {available_resources_js};
+    window.SINGLE_NODE_MODE = {single_node_mode_js};
 </script>
 </head>"""
 
                 html_content = html_content.replace("</head>", injection_script)
 
-                print(f"[DEBUG] Successfully loaded template from {template_file}")
+                self.log.debug(f"Successfully loaded template from {template_file}")
                 return html_content
             else:
                 # If there is no template or load fail, fall back to basic forms
-                print(f"[DEBUG] Failed to load template from {template_file}, Fall back to basic form.")
+                self.log.debug(f"Failed to load template from {template_file}, Fall back to basic form.")
                 return self._generate_fallback_form(available_resource_names)
 
         except Exception as e:
-            print(f"[ERROR] Failed to load options form: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return f"""
+            self.log.error(f"Failed to load options form: {e}", exc_info=True)
+            # Don't expose internal error details to users
+            return """
             <div style="padding: 20px; background: #ffebee; border: 1px solid #f44336; border-radius: 8px; color: #c62828;">
                 <strong>Error:</strong> Failed to load resource selection form.
-                <br>Error: {str(e)}
-                <br>Please check the logs for more details.
+                <br>Please contact an administrator or check the server logs.
             </div>
             """
 
@@ -998,8 +1414,8 @@ class RemoteLabKubeSpawner(KubeSpawner):
         # Configure spawner based on selections
         self._configure_spawner(resource_type, gpu_selection)
 
-        print(
-            f"[DEBUG] User selected resource: {resource_type} with GPU: {gpu_selection} for {runtime_minutes} minutes"
+        self.log.debug(
+            f"User selected resource: {resource_type} with GPU: {gpu_selection} for {runtime_minutes} minutes"
         )
 
         return options
@@ -1132,7 +1548,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
             self.extra_resource_limits = {"amd.com/gpu": str(requirements["amd.com/gpu"])}
         elif "amd.com/npu" in requirements:
             pass
-            print("[DEBUG] NPU DEVICE PLUGIN are removed, amd.com/npu is no more needed")
+            self.log.debug("NPU DEVICE PLUGIN are removed, amd.com/npu is no more needed")
             # self.extra_resource_guarantees = {"amd.com/npu": str(requirements["amd.com/npu"])}
             # self.extra_resource_limits = {"amd.com/npu": str(requirements["amd.com/npu"])}
 
@@ -1148,18 +1564,18 @@ class RemoteLabKubeSpawner(KubeSpawner):
             }
 
             self.node_affinity_required = [node_affinity]
-            print(f"[DEBUG] Set node affinity for GPU {gpu_selection}: {node_affinity}")
+            self.log.debug(f"Set node affinity for GPU {gpu_selection}: {node_affinity}")
 
             # Set environment variables
             if gpu_selection in ENVIRONMENT_MAPPING:
                 env_vars = ENVIRONMENT_MAPPING[gpu_selection]
                 if env_vars:
                     self.environment.update(env_vars)
-                    print(f"[DEBUG] Set environment variables: {env_vars}")
+                    self.log.debug(f"Set environment variables: {env_vars}")
 
         # Special configuration for NPU resources
         if resource_type in ["Tutorial-NPU-Resnet", "ROSCON2025-GPU", "ROSCON2025-NPU"]:
-            print(f"[DEBUG] Set node affinity for NPU {resource_type}")
+            self.log.debug(f"Set node affinity for NPU {resource_type}")
             # Apply NPU security configuration
             for key, value in NPU_SECURITY_CONFIG.items():
                 if hasattr(self, key):
@@ -1170,15 +1586,66 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
     async def start(self):
         """Start the spawner and schedule automatic shutdown."""
-        # Get runtime setting before starting the container
+        # Get runtime and resource settings
         runtime_minutes = self.user_options.get("runtime_minutes", 20)
+        resource_type = self.user_options.get("resource_type", "cpu")
+        gpu_selection = self.user_options.get("gpu_selection", None)
+        username = self.user.name.lower()
+
+        # Determine accelerator type for quota calculation
+        # Use gpu_selection if set, otherwise "cpu"
+        accelerator_type = gpu_selection if gpu_selection else "cpu"
+
+        # Quota check (if enabled)
+        if QUOTA_ENABLED:
+            from quota_manager import get_quota_manager
+
+            quota_manager = get_quota_manager()
+
+            # Check if user has unlimited quota
+            has_unlimited = quota_manager.is_unlimited_in_db(username)
+
+            if has_unlimited:
+                print(f"[QUOTA] User {username} has unlimited quota, skipping quota check")
+                self.usage_session_id = None
+                self._has_unlimited_quota = True
+            else:
+                can_start, message, estimated_cost = quota_manager.can_start_container(
+                    username,
+                    accelerator_type,
+                    runtime_minutes,
+                    QUOTA_RATES,
+                    DEFAULT_QUOTA,
+                )
+
+                if not can_start:
+                    print(f"[QUOTA] Blocked container start for {username}: {message}")
+                    raise web.HTTPError(
+                        403,
+                        f"Cannot start container: {message}. Please contact administrator to add quota.",
+                    )
+
+                # Start usage session for tracking (store accelerator_type for rate calculation)
+                self.usage_session_id = quota_manager.start_usage_session(username, accelerator_type)
+                self._has_unlimited_quota = False
+                print(
+                    f"[QUOTA] Session {self.usage_session_id} started for {username} ({accelerator_type}), estimated cost: {estimated_cost}"
+                )
+        else:
+            self.usage_session_id = None
+            self._has_unlimited_quota = True  # Quota disabled = effectively unlimited
+
         start_time = int(time.time())
+
+        # Calculate quota rate for this accelerator type
+        quota_rate = get_quota_rate(accelerator_type) if QUOTA_ENABLED else 0
 
         # Set environment variables for jupyterlab-server-timer extension
         self.environment.update(
             {
                 "JOB_START_TIME": str(start_time),
                 "JOB_RUN_TIME": str(runtime_minutes),
+                "QUOTA_RATE": str(quota_rate),
             }
         )
 
@@ -1186,23 +1653,58 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
         # Store for internal use (auto-shutdown logic)
         self.start_time = start_time
-        self.shutdown_time = start_time + (runtime_minutes * 60)
+        self._resource_type = resource_type
 
-        # Schedule periodic checks and the final shutdown
-        loop = asyncio.get_event_loop()
-        self.check_timer = loop.call_later(60, self.check_timeout)  # Check every minute
+        # In single-node mode, skip auto-shutdown timer
+        if SINGLE_NODE_MODE:
+            self.shutdown_time = None
+            self.check_timer = None
+            self.log.debug(f"Container for {self.user.name} started (single-node mode, no time limit)")
+        else:
+            self.shutdown_time = start_time + (runtime_minutes * 60)
+            # Schedule periodic checks and the final shutdown
+            loop = asyncio.get_event_loop()
+            self.check_timer = loop.call_later(60, self.check_timeout)  # Check every minute
+            self.log.debug(f"Container for {self.user.name} started at {time.ctime(self.start_time)}")
+            self.log.debug(f"Scheduled shutdown after {runtime_minutes} minutes at {time.ctime(self.shutdown_time)}")
 
-        print(f"[DEBUG] Container for {self.user.name} started at {time.ctime(self.start_time)}")
-        print(f"[DEBUG] Scheduled shutdown after {runtime_minutes} minutes at {time.ctime(self.shutdown_time)}")
         return start_result
+
+    async def stop(self, now=False):
+        """Stop the container and record quota usage."""
+        # End usage session and deduct quota
+        if QUOTA_ENABLED and hasattr(self, "usage_session_id") and self.usage_session_id:
+            session_id = self.usage_session_id
+            username = self.user.name
+            self.usage_session_id = None  # Clear immediately to prevent double processing
+
+            try:
+                from quota_manager import get_quota_manager
+
+                quota_manager = get_quota_manager()
+                duration, quota_used = quota_manager.end_usage_session(session_id, QUOTA_RATES)
+                print(f"[QUOTA] Session ended for {username}. Duration: {duration} min, Quota used: {quota_used}")
+            except Exception as e:
+                print(f"[QUOTA] Error ending session for {username}: {e}")
+
+        # Cancel timer if exists
+        if hasattr(self, "check_timer") and self.check_timer:
+            with contextlib.suppress(Exception):
+                self.check_timer.cancel()
+
+        return await super().stop(now=now)
 
     def check_timeout(self) -> None:
         """Periodic check for container timeout."""
+        # Skip if no shutdown time set (single-node mode)
+        if self.shutdown_time is None:
+            return
+
         current_time = time.time()
 
         if current_time >= self.shutdown_time:
-            print(
-                f"[DEBUG] Stopping container for user {self.user.name} as requested time has elapsed at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+            self.log.debug(
+                f"Stopping container for user {self.user.name} as requested time has elapsed at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
             )
             asyncio.ensure_future(self.stop())
         else:
@@ -1213,8 +1715,8 @@ class RemoteLabKubeSpawner(KubeSpawner):
             # Log remaining time every 5 minutes
             remaining_minutes = int((self.shutdown_time - current_time) / 60)
             if remaining_minutes % 5 == 0:
-                print(
-                    f"[DEBUG] Container for {self.user.name} has {remaining_minutes} minutes remaining at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+                self.log.debug(
+                    f"Container for {self.user.name} has {remaining_minutes} minutes remaining at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
                 )
 
 
@@ -1230,6 +1732,12 @@ c.JupyterHub.spawner_class = RemoteLabKubeSpawner
 # Auth mode: "auto-login" | "dummy" | "github" | "multi"
 AUTH_MODE = z2jh_get_config("custom.authMode", "auto-login")
 print(f"[INFO] Auth mode: {AUTH_MODE}")
+
+# Single-node mode: Disable runtime limit (containers run indefinitely)
+# Automatically enabled for auto-login mode, or set via environment variable
+SINGLE_NODE_MODE = os.environ.get("SINGLE_NODE_MODE", "").lower() == "true" or AUTH_MODE == "auto-login"
+if SINGLE_NODE_MODE:
+    print("[INFO] Single-node mode: Runtime limit disabled")
 
 if AUTH_MODE == "auto-login":
     # Auto-login mode: No credentials required (for single-node/personal use)
@@ -1262,6 +1770,32 @@ c.JupyterHub.extra_handlers.append((r"/admin/users", AdminUIHandler))
 c.JupyterHub.extra_handlers.append((r"/admin/groups", AdminUIHandler))
 c.JupyterHub.extra_handlers.append((r"/admin/api/set-password", AdminAPISetPasswordHandler))
 c.JupyterHub.extra_handlers.append((r"/admin/api/generate-password", AdminAPIGeneratePasswordHandler))
+
+# Accelerator info API (always available)
+c.JupyterHub.extra_handlers.append((r"/api/accelerators", AcceleratorsAPIHandler))
+
+# Quota management API handlers
+# Note: specific routes must come before generic ([^/]+) pattern
+c.JupyterHub.extra_handlers.append((r"/admin/api/quota/?", QuotaAPIHandler))
+c.JupyterHub.extra_handlers.append((r"/admin/api/quota/batch", QuotaBatchAPIHandler))
+c.JupyterHub.extra_handlers.append((r"/admin/api/quota/refresh", QuotaRefreshHandler))
+c.JupyterHub.extra_handlers.append((r"/admin/api/quota/([^/]+)", QuotaAPIHandler))
+c.JupyterHub.extra_handlers.append((r"/api/quota/rates", QuotaRatesAPIHandler))
+c.JupyterHub.extra_handlers.append((r"/api/quota/me", UserQuotaInfoHandler))
+
+# Cleanup stale quota sessions on Hub startup
+if QUOTA_ENABLED:
+    try:
+        from quota_manager import get_quota_manager
+
+        quota_manager = get_quota_manager()
+        stale_sessions = quota_manager.cleanup_stale_sessions()
+        if stale_sessions:
+            print(f"[QUOTA] Cleaned up {len(stale_sessions)} stale sessions on startup")
+        active_count = quota_manager.get_active_sessions_count()
+        print(f"[QUOTA] {active_count} active sessions found")
+    except Exception as e:
+        print(f"[QUOTA] Warning: Failed to cleanup stale sessions: {e}")
 
 # Set custom template path
 c.JupyterHub.template_paths = ["/tmp/custom_templates"]
@@ -1324,8 +1858,6 @@ for trait, cfg_key in (
     if cfg_key is None:
         cfg_key = RemoteLabAuthenticator._camelCaseify(trait)
     set_config_if_not_none(c.JupyterHub, trait, "hub." + cfg_key)
-    print("set config @445", trait, "hub." + cfg_key)
-print("HUB SETTING finished", c.JupyterHub)
 
 # hub_bind_url configures what the JupyterHub process within the hub pod's
 # container should listen to.
@@ -1356,8 +1888,8 @@ common_labels["app.kubernetes.io/name"] = common_labels["app"] = z2jh_get_config
 release = z2jh_get_config("Release.Name")
 if release:
     common_labels["app.kubernetes.io/instance"] = common_labels["release"] = release
-chart_name = z2jh_get_config("Chart.Name")
-chart_version = z2jh_get_config("Chart.Version")
+chart_name: str | None = z2jh_get_config("Chart.Name")
+chart_version: str | None = z2jh_get_config("Chart.Version")
 if chart_name and chart_version:
     common_labels["helm.sh/chart"] = common_labels["chart"] = f"{chart_name}-{chart_version.replace('+', '_')}"
 common_labels["app.kubernetes.io/managed-by"] = "kubespawner"
@@ -1420,9 +1952,9 @@ image_pull_secrets = []
 if z2jh_get_config("imagePullSecret.automaticReferenceInjection") and z2jh_get_config("imagePullSecret.create"):
     image_pull_secrets.append(get_name("image-pull-secret"))
 if z2jh_get_config("imagePullSecrets"):
-    image_pull_secrets.extend(z2jh_get_config("imagePullSecrets"))
+    image_pull_secrets.extend(z2jh_get_config_list("imagePullSecrets"))
 if z2jh_get_config("singleuser.image.pullSecrets"):
-    image_pull_secrets.extend(z2jh_get_config("singleuser.image.pullSecrets"))
+    image_pull_secrets.extend(z2jh_get_config_list("singleuser.image.pullSecrets"))
 if image_pull_secrets:
     c.KubeSpawner.image_pull_secrets = image_pull_secrets
 
@@ -1459,8 +1991,8 @@ if match_node_purpose:
         raise ValueError(f"Unrecognized value for matchNodePurpose: {match_node_purpose}")
 
 # Combine the common tolerations for user pods with singleuser tolerations
-scheduling_user_pods_tolerations = z2jh_get_config("scheduling.userPods.tolerations", [])
-singleuser_extra_tolerations = z2jh_get_config("singleuser.extraTolerations", [])
+scheduling_user_pods_tolerations = z2jh_get_config_list("scheduling.userPods.tolerations")
+singleuser_extra_tolerations = z2jh_get_config_list("singleuser.extraTolerations")
 tolerations = scheduling_user_pods_tolerations + singleuser_extra_tolerations
 if tolerations:
     c.KubeSpawner.tolerations = tolerations
@@ -1509,9 +2041,9 @@ elif storage_type == "static":
 
 # Inject singleuser.extraFiles as volumes and volumeMounts with data loaded from
 # the dedicated k8s Secret prepared to hold the extraFiles actual content.
-extra_files = z2jh_get_config("singleuser.extraFiles", {})
+extra_files = z2jh_get_config_dict("singleuser.extraFiles")
 if extra_files:
-    volume = {
+    volume: dict[str, Any] = {
         "name": "files",
     }
     items = []
@@ -1544,8 +2076,8 @@ if extra_files:
     c.KubeSpawner.volume_mounts.extend(volume_mounts)
 
 # Inject extraVolumes / extraVolumeMounts
-c.KubeSpawner.volumes.extend(z2jh_get_config("singleuser.storage.extraVolumes", []))
-c.KubeSpawner.volume_mounts.extend(z2jh_get_config("singleuser.storage.extraVolumeMounts", []))
+c.KubeSpawner.volumes.extend(z2jh_get_config_list("singleuser.storage.extraVolumes"))
+c.KubeSpawner.volume_mounts.extend(z2jh_get_config_list("singleuser.storage.extraVolumeMounts"))
 
 c.JupyterHub.services = []
 c.JupyterHub.load_roles = []
@@ -1686,7 +2218,9 @@ c.JupyterHub.cookie_secret = get_secret_value("hub.config.JupyterHub.cookie_secr
 # NOTE: CryptKeeper.keys should be a list of strings, but we have encoded as a
 #       single string joined with ; in the k8s Secret.
 #
-c.CryptKeeper.keys = get_secret_value("hub.config.CryptKeeper.keys").split(";")
+_crypt_keys = get_secret_value("hub.config.CryptKeeper.keys")
+if _crypt_keys is not None:
+    c.CryptKeeper.keys = _crypt_keys.split(";")
 
 # load hub.config values, except potentially seeded secrets already loaded
 for app, cfg in z2jh_get_config("hub.config", {}).items():
@@ -1720,5 +2254,5 @@ for key, config_py in sorted(z2jh_get_config("hub.extraConfig", {}).items()):
 # Pass authenticator_mode to templates
 if not isinstance(c.JupyterHub.template_vars, dict):
     c.JupyterHub.template_vars = {}
-c.JupyterHub.template_vars["authenticator_mode"] = AUTH_MODE
+c.JupyterHub.template_vars["authenticator_mode"] = AUTH_MODE  # type: ignore[assignment]
 print(f"✅ Template vars set: authenticator_mode={AUTH_MODE}")

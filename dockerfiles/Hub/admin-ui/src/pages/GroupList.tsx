@@ -119,20 +119,22 @@ export function GroupList() {
           <Button variant="primary" onClick={() => setShowCreateModal(true)}>
             Create Group
           </Button>
+        </div>
+        <div className="d-flex gap-2">
           <Button
             variant="outline-secondary"
             onClick={() => navigate('/users')}
           >
             Back to Users
           </Button>
+          <Button
+            variant="outline-secondary"
+            as="a"
+            href={`${window.jhdata?.base_url ?? '/hub/'}admin`}
+          >
+            Legacy Admin
+          </Button>
         </div>
-        <Button
-          variant="outline-secondary"
-          as="a"
-          href={`${(window as any).jhdata?.base_url || '/hub/'}admin`}
-        >
-          Legacy Admin
-        </Button>
       </div>
 
       {error && (
