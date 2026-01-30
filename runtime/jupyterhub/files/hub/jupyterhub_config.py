@@ -963,7 +963,9 @@ class QuotaBatchAPIHandler(APIHandler):
                     results["details"].append({"username": user.username, "status": "success", "balance": user.amount})
                 except Exception:
                     results["failed"] += 1
-                    results["details"].append({"username": user.username, "status": "failed", "error": "Processing error"})
+                    results["details"].append(
+                        {"username": user.username, "status": "failed", "error": "Processing error"}
+                    )
 
             self.set_header("Content-Type", "application/json")
             self.finish(json.dumps(results))
@@ -1062,7 +1064,9 @@ class QuotaRefreshHandler(APIHandler):
                 errors = [{"field": str(e["loc"]), "message": e["msg"]} for e in ve.errors()]
                 return self.finish(json.dumps({"error": "Validation failed", "details": errors}))
 
-            self.log.info(f"[QUOTA] Refresh triggered: rule={req.rule_name}, action={req.action.value}, amount={req.amount}")
+            self.log.info(
+                f"[QUOTA] Refresh triggered: rule={req.rule_name}, action={req.action.value}, amount={req.amount}"
+            )
 
             quota_manager = get_quota_manager()
             result = quota_manager.batch_refresh_quota(

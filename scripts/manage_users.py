@@ -733,7 +733,7 @@ print(f"BALANCE:{{balance}}")
 
 def list_quota_from_pod(namespace: str = "jupyterhub") -> list[dict] | None:
     """Get all user quota balances via kubectl exec."""
-    python_code = '''
+    python_code = """
 import sys
 import json
 sys.path.insert(0, "/etc/jupyterhub")
@@ -742,7 +742,7 @@ from quota_manager import get_quota_manager
 qm = get_quota_manager()
 balances = qm.get_all_balances()
 print("JSON:" + json.dumps(balances))
-'''
+"""
 
     try:
         result = subprocess.run(
