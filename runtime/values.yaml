@@ -96,6 +96,15 @@ custom:
     # Minimum quota required to start any container
     minimumToStart: 10
 
+    # Default quota for new users
+    # When a new user first attempts to use the system, they will be automatically
+    # granted this amount of quota if they don't have unlimited status
+    defaultQuota: 0
+
+    # Grant unlimited quota to new users by default
+    # If true, new users will have unlimited quota (overrides defaultQuota)
+    defaultUnlimited: false
+
     # Admin users have unlimited quota (no quota deduction)
     adminsUnlimited: true
 

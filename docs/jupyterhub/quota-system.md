@@ -26,12 +26,62 @@ Configure the quota system in your Helm values.yaml under `custom.quota`:
 ```yaml
 custom:
   quota:
-    enabled: true              # Enable/disable quota system
+    enabled: null              # Enable/disable quota system (null = auto-detect based on authMode)
     cpuRate: 1                 # Cost per minute for CPU-only containers
     minimumToStart: 10         # Minimum quota required to start any container
+    defaultQuota: 0            # Default quota granted to new users (0 = no initial allocation)
+    defaultUnlimited: false    # Grant unlimited quota to new users (overrides defaultQuota)
     adminsUnlimited: true      # Admin users have unlimited quota
     unlimitedUsers: []         # List of usernames with unlimited quota
 ```
+
+### New User Default Quota
+
+Two settings control quota allocation for new users:
+
+#### defaultQuota
+
+Controls how much quota new users receive automatically:
+
+- **Value `0` (default)**: New users start with zero quota and must be manually granted quota by an administrator
+- **Value `> 0`**: New users are automatically granted this amount when they first attempt to use the system
+
+**Example configuration:**
+```yaml
+custom:
+  quota:
+    defaultQuota: 100  # Automatically grant 100 quota units to new users
+```
+
+#### defaultUnlimited
+
+Grant unlimited quota to all new users:
+
+- **Value `false` (default)**: New users receive quota based on `defaultQuota` setting
+- **Value `true`**: New users are automatically granted unlimited quota (overrides `defaultQuota`)
+
+**Example configuration:**
+```yaml
+custom:
+  quota:
+    defaultUnlimited: true  # All new users get unlimited quota
+```
+
+#### How It Works
+
+This automatic allocation happens when a new user first tries to start a container. The system will:
+1. Check if the user has a quota record in the database
+2. If not found:
+   - If `defaultUnlimited: true`, create a record with unlimited quota status
+   - Else if `defaultQuota > 0`, create a record with the default amount
+   - Otherwise, create a record with zero quota
+3. Record this as an "initial_grant" transaction in the audit log
+
+**Priority order:**
+1. Admin users (if `adminsUnlimited: true`)
+2. Users in `unlimitedUsers` list
+3. New users with `defaultUnlimited: true`
+4. New users with `defaultQuota` value
 
 ### Quota Rates by Resource Type
 
@@ -181,18 +231,11 @@ kubectl -n jupyterhub logs -l app.kubernetes.io/component=quota-refresh --tail=5
 
 The Admin Panel provides a graphical interface for quota management. Access it at `/hub/admin/users`.
 
-<!-- TODO: Add screenshot showing the Users page with quota column -->
-<!-- ![Users Page with Quota](./images/quota-1-users-page.png) -->
+![Users Page with Quota](../imgs/jupyterhub/quota-1-users-page.png)
 
 #### Quota Column
 
 When the quota system is enabled, the Users page displays a **Quota** column showing each user's balance.
-
-**Status Indicators** (color-coded badges):
-- **Green**: Balance > 50 (healthy)
-- **Yellow**: Balance 1-49 (warning)
-- **Red**: Balance ≤ 0 (critical)
-- **Blue badge with ∞**: Unlimited status
 
 #### Inline Editing
 
@@ -201,8 +244,7 @@ Click directly on a user's quota value to edit:
 - Press **Escape** to cancel
 - Enter `-1`, `∞`, or `unlimited` to grant unlimited status
 
-<!-- TODO: Add screenshot showing inline editing of quota value -->
-<!-- ![Inline Quota Editing](./images/quota-2-inline-edit.png) -->
+![Inline Quota Editing](../imgs/jupyterhub/quota-2-inline-edit.png)
 
 #### Batch Operations
 
@@ -213,8 +255,7 @@ Click directly on a user's quota value to edit:
    - `-1`, `∞`, or `unlimited` to grant unlimited status
 4. Click "Apply" to update all selected users
 
-<!-- TODO: Add screenshot showing batch quota operation with multiple users selected -->
-<!-- ![Batch Quota Operation](./images/quota-3-batch-operation.png) -->
+![Batch Quota Operation](../imgs/jupyterhub/quota-3-batch-operation.png)
 
 ### REST API Endpoints
 
@@ -249,7 +290,18 @@ GET /admin/api/quota/<username>
   "balance": 500,
   "unlimited": false,
   "recent_transactions": [
-    {"amount": -10, "type": "usage", "balance_after": 500, "created_at": "2026-01-15T10:00:00"}
+    {
+      "id": 123,
+      "username": "user1",
+      "amount": -10,
+      "transaction_type": "usage",
+      "resource_type": "cpu",
+      "description": "Session 456: 10 minutes",
+      "balance_before": 510,
+      "balance_after": 500,
+      "created_at": "2026-01-15T10:00:00",
+      "created_by": null
+    }
   ]
 }
 ```
@@ -444,7 +496,13 @@ GET /api/quota/me
   "balance": 450,
   "unlimited": false,
   "rates": {"cpu": 1, "phx": 2, "strix": 2},
-  "minimum_to_start": 10
+  "accelerators": {
+    "phx": {
+      "displayName": "AMD Radeon™ 780M (Phoenix Point iGPU)",
+      "description": "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
+    }
+  },
+  "enabled": true
 }
 ```
 

@@ -262,6 +262,14 @@ def get_quota_rate(accelerator_type: str | None) -> int:
 # Config: custom.quota.minimumToStart (int)
 MINIMUM_QUOTA_TO_START = int(z2jh_get_config("custom.quota.minimumToStart", 10))
 
+# Default quota for new users
+# Config: custom.quota.defaultQuota (int)
+DEFAULT_QUOTA = int(z2jh_get_config("custom.quota.defaultQuota", 0))
+
+# Grant unlimited quota to new users by default
+# Config: custom.quota.defaultUnlimited (bool)
+DEFAULT_UNLIMITED = bool(z2jh_get_config("custom.quota.defaultUnlimited", False))
+
 # Admin users have unlimited quota (no quota deduction)
 # Config: custom.quota.adminsUnlimited (bool)
 QUOTA_ADMINS_UNLIMITED = bool(z2jh_get_config("custom.quota.adminsUnlimited", True))
@@ -273,6 +281,10 @@ QUOTA_UNLIMITED_USERS: list[str] = z2jh_get_config_list("custom.quota.unlimitedU
 if QUOTA_ENABLED:
     print(f"[CONFIG] Quota rates by accelerator: {QUOTA_RATES}")
     print(f"[CONFIG] Quota minimum to start: {MINIMUM_QUOTA_TO_START}")
+    print(
+        f"[CONFIG] Quota default for new users: {DEFAULT_QUOTA}"
+        + (f" (unlimited)" if DEFAULT_UNLIMITED else "")
+    )
     print(f"[CONFIG] Quota admins unlimited: {QUOTA_ADMINS_UNLIMITED}, unlimited users: {QUOTA_UNLIMITED_USERS}")
 
 LOCAL_ACCOUNT_PREFIX = "LocalAccount"
@@ -1620,6 +1632,8 @@ class RemoteLabKubeSpawner(KubeSpawner):
                     is_admin,
                     QUOTA_ADMINS_UNLIMITED,
                     QUOTA_UNLIMITED_USERS,
+                    DEFAULT_QUOTA,
+                    DEFAULT_UNLIMITED,
                 )
 
                 if not can_start:
