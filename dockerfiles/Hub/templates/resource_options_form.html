@@ -390,15 +390,34 @@ let userQuotaInfo = {
 let selectedResourceType = null;
 let selectedAcceleratorType = 'cpu';  // Track selected GPU/accelerator type for quota calculation
 
+// Get XSRF token from cookie (required for JupyterHub API calls)
+function getXsrfToken() {
+    const match = document.cookie.match(/(?:^|;\s*)_xsrf=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
 // Fetch user's quota information and accelerator config
 async function fetchUserQuota() {
     try {
-        const response = await fetch('/hub/api/quota/me');
-        if (response.ok) {
-            userQuotaInfo = await response.json();
-            displayQuotaBalance();
-            return userQuotaInfo;
+        const headers = { 'X-XSRFToken': getXsrfToken() };
+        // Fetch quota info and accelerators in parallel
+        const [quotaResponse, acceleratorsResponse] = await Promise.all([
+            fetch('/hub/api/quota/me', { headers }),
+            fetch('/hub/api/accelerators', { headers })
+        ]);
+
+        if (quotaResponse.ok) {
+            userQuotaInfo = await quotaResponse.json();
         }
+
+        // Merge accelerators from separate endpoint
+        if (acceleratorsResponse.ok) {
+            const acceleratorsData = await acceleratorsResponse.json();
+            userQuotaInfo.accelerators = acceleratorsData.accelerators || {};
+        }
+
+        displayQuotaBalance();
+        return userQuotaInfo;
     } catch (e) {
         console.log('Quota system not available or disabled');
     }

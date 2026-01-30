@@ -499,15 +499,56 @@ GET /api/quota/me
   "balance": 450,
   "unlimited": false,
   "rates": {"cpu": 1, "phx": 2, "strix": 2},
-  "accelerators": {
-    "phx": {
-      "displayName": "AMD Radeon™ 780M (Phoenix Point iGPU)",
-      "description": "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
-    }
-  },
   "enabled": true
 }
 ```
+
+To get accelerator options, use the separate `/api/accelerators` endpoint.
+
+### Quota Rates API
+
+Get quota rates and configuration (available to all authenticated users):
+
+```
+GET /api/quota/rates
+```
+
+**Response:**
+```json
+{
+  "enabled": true,
+  "rates": {"cpu": 1, "phx": 2, "strix": 2},
+  "minimum_to_start": 10
+}
+```
+
+- `enabled`: Whether the quota system is active
+- `rates`: Quota consumption rate per minute for each resource type
+- `minimum_to_start`: Minimum quota required to start any container
+
+### Accelerators API
+
+Get available accelerator options (always available, independent of quota system):
+
+```
+GET /api/accelerators
+```
+
+**Response:**
+```json
+{
+  "accelerators": {
+    "phx": {
+      "displayName": "AMD Radeon™ 780M (Phoenix Point iGPU)",
+      "description": "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X",
+      "nodeSelector": {"accelerator": "phx"},
+      "quotaRate": 2
+    }
+  }
+}
+```
+
+- `accelerators`: Available accelerator options with display name, description, node selector, and quota rate
 
 ### Insufficient Quota
 

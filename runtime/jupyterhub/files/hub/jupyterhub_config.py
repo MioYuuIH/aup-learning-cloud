@@ -993,20 +993,29 @@ class QuotaBatchAPIHandler(APIHandler):
             self.finish(json.dumps({"error": "Internal server error"}))
 
 
-class QuotaRatesAPIHandler(APIHandler):
-    """API endpoint for quota rates and accelerator configuration."""
+class AcceleratorsAPIHandler(APIHandler):
+    """API endpoint for available accelerator options."""
 
     @web.authenticated
     async def get(self):
-        """Get quota rates and accelerator options."""
+        """Get available accelerator options."""
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps({"accelerators": ACCELERATOR_OPTIONS}))
+
+
+class QuotaRatesAPIHandler(APIHandler):
+    """API endpoint for quota rates configuration."""
+
+    @web.authenticated
+    async def get(self):
+        """Get quota rates and configuration."""
         self.set_header("Content-Type", "application/json")
         self.finish(
             json.dumps(
                 {
+                    "enabled": QUOTA_ENABLED,
                     "rates": QUOTA_RATES,
                     "minimum_to_start": MINIMUM_QUOTA_TO_START,
-                    "enabled": QUOTA_ENABLED,
-                    "accelerators": ACCELERATOR_OPTIONS,
                 }
             )
         )
@@ -1039,7 +1048,6 @@ class UserQuotaInfoHandler(APIHandler):
                     "balance": balance,
                     "unlimited": has_unlimited,
                     "rates": QUOTA_RATES,
-                    "accelerators": ACCELERATOR_OPTIONS,
                     "enabled": QUOTA_ENABLED,
                 }
             )
@@ -1788,6 +1796,9 @@ c.JupyterHub.extra_handlers.append((r"/admin/users", AdminUIHandler))
 c.JupyterHub.extra_handlers.append((r"/admin/groups", AdminUIHandler))
 c.JupyterHub.extra_handlers.append((r"/admin/api/set-password", AdminAPISetPasswordHandler))
 c.JupyterHub.extra_handlers.append((r"/admin/api/generate-password", AdminAPIGeneratePasswordHandler))
+
+# Accelerator info API (always available)
+c.JupyterHub.extra_handlers.append((r"/api/accelerators", AcceleratorsAPIHandler))
 
 # Quota management API handlers
 # Note: specific routes must come before generic ([^/]+) pattern
