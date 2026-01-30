@@ -128,9 +128,7 @@ class QuotaManager:
             row = cursor.fetchone()
             return row["balance"] if row else 0
 
-    def ensure_user_quota(
-        self, username: str, default_quota: int = 0, default_unlimited: bool = False
-    ) -> int:
+    def ensure_user_quota(self, username: str, default_quota: int = 0, default_unlimited: bool = False) -> int:
         """
         Ensure user has a quota record. If user doesn't exist:
         - If default_unlimited=True, grant unlimited quota

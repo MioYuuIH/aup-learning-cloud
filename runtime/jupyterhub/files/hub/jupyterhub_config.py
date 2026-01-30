@@ -281,10 +281,7 @@ QUOTA_UNLIMITED_USERS: list[str] = z2jh_get_config_list("custom.quota.unlimitedU
 if QUOTA_ENABLED:
     print(f"[CONFIG] Quota rates by accelerator: {QUOTA_RATES}")
     print(f"[CONFIG] Quota minimum to start: {MINIMUM_QUOTA_TO_START}")
-    print(
-        f"[CONFIG] Quota default for new users: {DEFAULT_QUOTA}"
-        + (" (unlimited)" if DEFAULT_UNLIMITED else "")
-    )
+    print(f"[CONFIG] Quota default for new users: {DEFAULT_QUOTA}" + (" (unlimited)" if DEFAULT_UNLIMITED else ""))
     print(f"[CONFIG] Quota admins unlimited: {QUOTA_ADMINS_UNLIMITED}, unlimited users: {QUOTA_UNLIMITED_USERS}")
 
 LOCAL_ACCOUNT_PREFIX = "LocalAccount"
