@@ -17,7 +17,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, Form, InputGroup, Badge, Spinner, Alert, ButtonGroup, Modal } from 'react-bootstrap';
 import type { User } from '../types';
@@ -26,6 +26,7 @@ import type { UserQuota } from '../api/client';
 import { CreateUserModal } from '../components/CreateUserModal';
 import { SetPasswordModal } from '../components/SetPasswordModal';
 import { EditUserModal } from '../components/EditUserModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 export function UserList() {
   const navigate = useNavigate();
@@ -50,6 +51,9 @@ export function UserList() {
   const [batchQuotaInput, setBatchQuotaInput] = useState('100');
   const [sortColumn, setSortColumn] = useState<'name' | 'admin' | 'quota' | 'server' | 'lastActivity'>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const jhdata = window.jhdata ?? {};
   const baseUrl = jhdata.base_url ?? '/hub/';
@@ -310,6 +314,36 @@ export function UserList() {
     setShowEditModal(true);
   };
 
+  const toggleUserExpand = (username: string) => {
+    const newExpanded = new Set(expandedUsers);
+    if (newExpanded.has(username)) {
+      newExpanded.delete(username);
+    } else {
+      newExpanded.add(username);
+    }
+    setExpandedUsers(newExpanded);
+  };
+
+  const openDeleteModal = (user: User) => {
+    setUserToDelete(user);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+      setActionLoading(`delete-${userToDelete.name}`);
+      await api.deleteUser(userToDelete.name);
+      setShowDeleteModal(false);
+      setUserToDelete(null);
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete user');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
@@ -442,6 +476,7 @@ export function UserList() {
       <Table striped hover responsive>
         <thead>
           <tr>
+            <th style={{ width: '30px' }}></th>
             <th style={{ width: '40px' }}>
               <Form.Check
                 type="checkbox"
@@ -471,7 +506,19 @@ export function UserList() {
         </thead>
         <tbody>
           {paginatedUsers.map((user) => (
-            <tr key={user.name}>
+            <React.Fragment key={user.name}>
+            <tr>
+              <td>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="p-0"
+                  onClick={() => toggleUserExpand(user.name)}
+                  style={{ textDecoration: 'none' }}
+                >
+                  {expandedUsers.has(user.name) ? '▼' : '▶'}
+                </Button>
+              </td>
               <td>
                 <Form.Check
                   type="checkbox"
@@ -597,9 +644,80 @@ export function UserList() {
                       <i className="bi bi-key"></i> Reset PW
                     </Button>
                   )}
+                  {user.name !== 'admin' && (
+                    <Button
+                      variant="outline-danger"
+                      onClick={() => openDeleteModal(user)}
+                      title="Delete User"
+                      disabled={actionLoading === `delete-${user.name}`}
+                    >
+                      {actionLoading === `delete-${user.name}` ? (
+                        <Spinner animation="border" size="sm" />
+                      ) : (
+                        'Delete'
+                      )}
+                    </Button>
+                  )}
                 </ButtonGroup>
               </td>
             </tr>
+            {/* Expanded User Details */}
+            {expandedUsers.has(user.name) && (
+              <tr>
+                <td colSpan={quotaEnabled ? 8 : 7} style={{ backgroundColor: '#f8f9fa' }}>
+                  <div className="d-flex gap-4 p-2">
+                    {/* User Info */}
+                    <div style={{ flex: 1 }}>
+                      <h6 className="mb-2">User</h6>
+                      <table className="table table-sm table-bordered mb-0" style={{ fontSize: '0.85em' }}>
+                        <tbody>
+                          <tr><td style={{ width: '140px' }}><strong>admin</strong></td><td>{user.admin ? 'true' : 'false'}</td></tr>
+                          <tr><td><strong>auth_state</strong></td><td>{user.auth_state && Object.keys(user.auth_state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: '#f5f5f5', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(user.auth_state, null, 2)}</pre> : ''}</td></tr>
+                          <tr><td><strong>created</strong></td><td>{user.created || ''}</td></tr>
+                          <tr><td><strong>groups</strong></td><td>{user.groups?.join(', ') || ''}</td></tr>
+                          <tr><td><strong>kind</strong></td><td>user</td></tr>
+                          <tr><td><strong>last_activity</strong></td><td>{user.last_activity || ''}</td></tr>
+                          <tr><td><strong>name</strong></td><td>{user.name}</td></tr>
+                          <tr><td><strong>pending</strong></td><td>{user.pending || ''}</td></tr>
+                          <tr><td><strong>roles</strong></td><td><Badge bg="secondary">user</Badge></td></tr>
+                          <tr><td><strong>server</strong></td><td>{user.server || ''}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Server Info */}
+                    <div style={{ flex: 1 }}>
+                      <h6 className="mb-2">Server</h6>
+                      {user.servers && Object.keys(user.servers).length > 0 ? (
+                        <table className="table table-sm table-bordered mb-0" style={{ fontSize: '0.85em' }}>
+                          <tbody>
+                            {Object.entries(user.servers).map(([serverName, server]) => (
+                              <React.Fragment key={serverName}>
+                                <tr><td style={{ width: '140px' }}><strong>full_name</strong></td><td>{user.name}/{serverName || ''}</td></tr>
+                                <tr><td><strong>full_progress_url</strong></td><td></td></tr>
+                                <tr><td><strong>full_url</strong></td><td></td></tr>
+                                <tr><td><strong>last_activity</strong></td><td>{server.last_activity || ''}</td></tr>
+                                <tr><td><strong>name</strong></td><td>{serverName}</td></tr>
+                                <tr><td><strong>pending</strong></td><td>{server.pending || ''}</td></tr>
+                                <tr><td><strong>progress_url</strong></td><td>{server.progress_url || ''}</td></tr>
+                                <tr><td><strong>ready</strong></td><td>{server.ready ? 'true' : 'false'}</td></tr>
+                                <tr><td><strong>started</strong></td><td>{server.started || ''}</td></tr>
+                                <tr><td><strong>state</strong></td><td>{server.state && Object.keys(server.state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: '#f5f5f5', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.state, null, 2)}</pre> : ''}</td></tr>
+                                <tr><td><strong>stopped</strong></td><td>{!server.ready ? 'true' : 'false'}</td></tr>
+                                <tr><td><strong>url</strong></td><td>{server.url || ''}</td></tr>
+                                <tr><td><strong>user_options</strong></td><td>{server.user_options && Object.keys(server.user_options).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: '#f5f5f5', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.user_options, null, 2)}</pre> : ''}</td></tr>
+                              </React.Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="text-muted mb-0" style={{ fontSize: '0.85em' }}>No server running</p>
+                      )}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )}
+            </React.Fragment>
           ))}
         </tbody>
       </Table>
@@ -721,6 +839,21 @@ export function UserList() {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Delete User Confirmation Modal */}
+      <ConfirmModal
+        show={showDeleteModal}
+        title="Delete User"
+        message={`Are you sure you want to delete user "${userToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        confirmVariant="danger"
+        onConfirm={handleDeleteUser}
+        onCancel={() => {
+          setShowDeleteModal(false);
+          setUserToDelete(null);
+        }}
+        loading={actionLoading === `delete-${userToDelete?.name}`}
+      />
     </div>
   );
 }
