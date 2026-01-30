@@ -21,6 +21,17 @@ SOFTWARE.
 
 
 
+# JupyterHub Configuration Guide
+
+## Documentation
+
+- [Authentication Guide](./authentication-guide.md) - Setup GitHub OAuth and native authentication
+- [User Management Guide](./user-management.md) - Batch user operations with scripts
+- [User Quota System](./quota-system.md) - Resource usage tracking and quota management
+- [GitHub OAuth Setup](./How_to_Setup_GitHub_OAuth.md) - Step-by-step OAuth configuration
+
+---
+
 # How to setup [runtime/values.yaml](../../runtime/values.yaml)
 
 ## PrePuller settings
@@ -148,122 +159,3 @@ Refer to [Cluster-NFS-Setting](../../deploy/k8s/nfs-provisioner).
 ## After
 
 You should run [`helm upgrade`](../../scripts/helm_upgrade.bash) to apply the changes.
-
-# How to setup `jupyterhub_config.yaml`
-
-## Change Image Settings
-
-Find `RESOURCE_IMAGES` in `jupyterhub_config.py` and change the image settings.
-```python
-RESOURCE_IMAGES = {
-        "cpu": "ghcr.io/amdresearch/aup-cpu-notebook:v1.0",
-#    "mlir-aie": "ghcr.io/amdresearch/aup-mliraie-notebook:v1.0",
-    "Course-CV": "ghcr.io/amdresearch/aup-course-cv:v1.3.6",
-}
-```
-## Change Image Resource Limitations
-Find `RESOURCE_REQUIREMENTS` in `jupyterhub_config.py` and change the resource limitations.
-```python
-RESOURCE_REQUIREMENTS = {"Course-CV":  {"cpu": "4", "memory": "16Gi", "memory_limit": "24Gi", "amd.com/gpu": "1"},
-    "Course-DL":  {"cpu": "4", "memory": "16Gi", "memory_limit": "24Gi", "amd.com/gpu": "1"},}
-```
-
-For images using NPU, you need to add `"amd.com/npu": "1"` to the resource requirements. And explicitly set Special configuration for NPU resources.
-
-```python
-        if resource_type in ["Tutorial-NPU-Resnet", "mlir-aie", "ROSCON2025-GPU",  "ROSCON2025-NPU"]:
-            # Apply NPU security configuration
-            for key, value in NPU_SECURITY_CONFIG.items():
-                if hasattr(self, key):
-                    setattr(self, key, value)
-```
-
-## Change Node Preference 
-Find `NODE_SELECTOR_MAPPING` in `jupyterhub_config.py` and change the node preference.
-```python
-
-NODE_SELECTOR_MAPPING = {
-    # GPU nodes
-    "phx": {"node-type": "phx"},
-    "strix": {"node-type": "strix"},
-    "strix-halo": {"node-type": "strix-halo"},
-    "dgpu": {"node-type": "dgpu"},
-    # NPU nodes (Note: NPU's strix uses different labels)
-    "strix-npu": {"type": "strix"}
-}
-```
-
-## Change Team Resource Limitations
-Find `TEAM_RESOURCE_MAPPING` in `jupyterhub_config.py` and change the team resource limitations.
-
-```python
-TEAM_RESOURCE_MAPPING = {
-    "cpu": ["cpu"],
-    "gpu": ["Course-CV","Course-DL","Course-LLM", "Tutorial-HIP-Intro","Tutorial-LLM-Lemonade","Tutorial-LLM-Ollama", 
-            "ROSCON2025-GPU", "ROSCON2025-NPU", "ROSCON2025-DIGIT"],
-    "npu": ["Tutorial-NPU-Resnet", 
-            # "mlir-aie"
-            ],}
-```
-## Change Local Account Credentials
-
-Find this sections in `jupyterhub_config.py` and change the local account credentials.
-```python
-AUP_USERS = [f"AUP{i:02d}" for i in range(1, 51)]
-TEST_USERS = [f"TEST{i:02d}" for i in range(1, 51)]
-ROSCON_USERS = [f"ROSCON{i:02d}" for i in range(1, 51)]
-
-
-AUP_PASSWORD = "AUP"        
-TEST_PASSWORD = "TEST"       
-ROSCON_PASSWORD = "ROSCON"     
-ADMIN_PASSWORD = "AUP"
-```
-
-## Change Local Account Resource Settings
-
-Find `get_user_teams` in `RemoteLabKubeSpawner`, change them respectively.
-
-```python
-
-if LOCAL_ACCOUNT_PREFIX_UPPER in username:
-            print(f"[DEBUG] Enter local username checking: {username}")
-            if "AUP" in username:
-                print("[DEBUG] Matched AUP user group")
-                return TEAM_RESOURCE_MAPPING["AUP"]
-            elif "TEST" in username:
-                print("[DEBUG] Matched TEST user group")
-                return TEAM_RESOURCE_MAPPING["official"]
-            elif "ROSCON" in username:
-                print("[DEBUG] Matched ROSCON user group")
-                return TEAM_RESOURCE_MAPPING["ROSCON"]
-            return ["none"]
-```
-
-## Change Authentication Methods
-Find `authenticator_class` in `jupyterhub_config.py` and change the authentication methods.
-
-```python
-# default, support multiple authentication methods: local & github
-c.JupyterHub.spawner_class = RemoteLabKubeSpawner
-# any password will work, suggested to use during testing, do check resource mapping.
-c.JupyterHub.spawner_class = "dummy"
-# only allow GitHub OAuth, do check team membership and callback link.
-c.JupyterHub.authenticator_class = CustomGitHubOAuthenticator
-
-```
-
-About how to setup other authenticator methods, do check `CustomMultiAuthenticator` and set up `url_prefix`.
-
-```python
-c.MultiAuthenticator.authenticators = [
-    {
-        "authenticator_class": CustomGitHubOAuthenticator,
-        "url_prefix": "/github",
-    },
-    {
-        "authenticator_class": SimpleGroupAuthenticator,
-        "url_prefix": "/local",
-    },
-]
-```

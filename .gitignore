@@ -368,3 +368,7 @@ vite.config.ts.timestamp-*
 
 # Project specific
 dockerfiles/Courses/DL/data/FashionMNIST/raw/
+
+# Local config overrides (any file containing 'local')
+*local*
+*.local.*

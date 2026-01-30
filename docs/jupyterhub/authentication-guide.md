@@ -105,17 +105,15 @@ TEAM_RESOURCE_MAPPING = {
 
 ### Native Authenticator Settings
 
-The `CustomNativeAuthenticator` class settings:
+The `CustomFirstUseAuthenticator` class settings:
 
 ```python
-class CustomNativeAuthenticator(NativeAuthenticator):
-    prefix = ""                      # No username prefix
+class CustomFirstUseAuthenticator(FirstUseAuthenticator):
     service_name = "Native"
-    open_signup = False              # Disable self-registration
-    allow_self_approval_for = 'none' # Disable self-approval
+    create_users = False  # Only admin-created users can login
 ```
 
-**Important**: `open_signup = False` prevents users from creating accounts themselves.
+**Important**: `create_users = False` prevents users from creating accounts themselves. Users must be created by an admin first.
 
 ## Admin Management
 
@@ -290,12 +288,12 @@ cd dockerfiles/Hub
 
 ### Issue: Users can self-register
 
-**Cause**: `open_signup` is not set to `False`.
+**Cause**: `create_users` is not set to `False`.
 
 **Solution**: Verify in `jupyterhub_config.py`:
 ```python
-class CustomNativeAuthenticator(NativeAuthenticator):
-    open_signup = False
+class CustomFirstUseAuthenticator(FirstUseAuthenticator):
+    create_users = False
 ```
 
 ### Issue: API token authentication fails
@@ -353,7 +351,7 @@ class CustomNativeAuthenticator(NativeAuthenticator):
 **Solution**: Check resource mapping in `jupyterhub_config.py`:
 
 ```python
-# Verify user's group assignment in CustomNativeAuthenticator
+# Verify user's group assignment in CustomFirstUseAuthenticator
 async def authenticate(self, handler, data):
     result = await super().authenticate(handler, data)
     if result:

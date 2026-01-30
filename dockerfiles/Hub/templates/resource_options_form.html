@@ -319,7 +319,18 @@ SOFTWARE.
 </div>
 
 <div id="resourceForm" class="resource-container" style="max-width: 1000px; margin: 0 auto; padding: 25px; background: #f8f9fa; border-radius: 16px; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
-    
+
+    <!-- Quota Balance Display (hidden, used for data only) -->
+    <div id="quotaBalanceContainer" style="display: none;">
+        <span id="quotaBalance">0</span>
+    </div>
+
+    <!-- Insufficient Quota Warning -->
+    <div id="insufficientQuotaWarning" style="display: none; padding: 15px 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; color: #856404; margin-bottom: 20px;">
+        <strong>Insufficient Quota</strong><br>
+        You don't have enough quota to start a container. Please contact administrator.
+    </div>
+
     <div id="resourceList">
         <!-- Resources will be dynamically loaded here -->
     </div>
@@ -329,21 +340,35 @@ SOFTWARE.
         Please contact administrator for access.
     </div>
     
-    <div style="margin-top: 30px; padding-top: 25px; border-top: 1px solid #e0e0e0; display: flex; align-items: center; flex-wrap: wrap;">
+    <div id="runtimeContainer" style="margin-top: 30px; padding-top: 25px; border-top: 1px solid #e0e0e0; display: flex; align-items: center; flex-wrap: wrap;">
         <label for="runtime" style="color: #2c3e50; margin-right: 15px; font-weight: 500;">Run my server for (minutes):</label>
-        <input name="runtime" 
-               type="number" 
-               min="10" 
-               value="20" 
-               max="240" 
-               step="5" 
-               style="width: 120px; padding: 10px 12px; border: 1px solid #d0d7de; border-radius: 8px; font-size: 14px; color: #2c3e50; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s ease;" 
+        <input name="runtime"
+               id="runtimeInput"
+               type="number"
+               min="10"
+               value="20"
+               max="240"
+               step="5"
+               style="width: 120px; padding: 10px 12px; border: 1px solid #d0d7de; border-radius: 8px; font-size: 14px; color: #2c3e50; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s ease;"
                onFocus="this.style.borderColor='#5e81ac'; this.style.boxShadow='0 0 0 3px rgba(94, 129, 172, 0.2)';"
-               onBlur="this.style.borderColor='#d0d7de'; this.style.boxShadow='inset 0 1px 2px rgba(0,0,0,0.05)';"/>
+               onBlur="this.style.borderColor='#d0d7de'; this.style.boxShadow='inset 0 1px 2px rgba(0,0,0,0.05)';"
+               oninput="updateQuotaCostPreview();"/>
+        <!-- Quota Cost Preview -->
+        <div id="quotaCostPreview" style="display: none; margin-left: 20px; font-size: 14px;">
+            <span style="color: #666;">Estimated cost:</span>
+            <strong id="estimatedCost" style="color: #2e7d32;">0</strong>
+            <span style="color: #666;"> quota (Remaining: </span>
+            <strong id="remainingQuota" style="color: #2e7d32;">0</strong>
+            <span style="color: #666;">)</span>
+        </div>
     </div>
-    
-    <div style="margin-top: 25px;">
-        <input type="submit" id="startButton" value="Launch" class="btn btn-jupyter form-control" style="padding: 10px 20px; font-weight: 500; transition: all 0.2s ease; border-radius: 8px; opacity: 0.5; cursor: not-allowed;" disabled>
+
+    <div style="margin-top: 25px; display: flex; align-items: center; gap: 20px;">
+        <input type="submit" id="startButton" value="Launch" class="btn btn-jupyter form-control" style="padding: 10px 20px; font-weight: 500; transition: all 0.2s ease; border-radius: 8px; opacity: 0.5; cursor: not-allowed; flex: 0 0 auto; width: auto;" disabled>
+        <!-- Simple Quota Display next to Launch button -->
+        <div id="quotaDisplaySimple" style="display: none; font-size: 14px; color: #666;">
+            Quota: <strong id="quotaBalanceSimple" style="color: #5e81ac;">0</strong>
+        </div>
     </div>
 </div>
 
@@ -355,66 +380,175 @@ SOFTWARE.
 </div>
 
 <script>
-// GPU Node Options
-const GPU_NODE_OPTIONS = {
-    "phx": {
-        "name": "phx", 
-        "display_name": "AMD Radeon™ 780M (Phoenix Point iGPU)",
-        "description": "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X",
-        "node_selector": {"node-type": "phx"},
-        "env": { "HSA_OVERRIDE_GFX_VERSION": "11.0.0" }
-    },
-    "strix": {
-        "name": "strix",
-        "display_name": "AMD Radeon™ 890M (Strix Point iGPU)",
-        "description": "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X",
-        "node_selector": {"node-type": "strix"},
-        "env": {}
-    },
-    "strix-halo": {
-        "name": "strix-halo",
-        "display_name": "AMD Radeon™ 8060S (Strix Halo iGPU)",
-        "description": "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X",
-        "node_selector": {"node-type": "strix-halo"},
-        "env": {}
-    },
-    "dgpu": {
-        "name": "dgpu",
-        "display_name": "AMD Radeon™ 9070XT (Desktop GPU)", 
-        "description": "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6",
-        "node_selector": {"node-type": "dgpu"},
-        "env": {}
-    }
+// ============ Quota System ============
+let userQuotaInfo = {
+    balance: 0,
+    rates: {},
+    accelerators: {},  // Accelerator options from backend
+    enabled: false
 };
+let selectedResourceType = null;
+let selectedAcceleratorType = 'cpu';  // Track selected GPU/accelerator type for quota calculation
 
-const GFX1151_NODE_OPTIONS = {
-    "strix-halo": {
-        "name": "strix-halo",
-        "display_name": "AMD Radeon™ 8060S (Strix Halo iGPU)",
-        "description": "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X",
-        "node_selector": {"node-type": "strix-halo"},
-        "env": {}
-    }
-};
-const ROSCON2025_NODE_OPTIONS = {
+// Get XSRF token from cookie (required for JupyterHub API calls)
+function getXsrfToken() {
+    const match = document.cookie.match(/(?:^|;\s*)_xsrf=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
 
-        "strix-halo": {
-            "name": "strix-halo",
-            "display_name": "AMD Radeon™ 8060S (Strix Halo iGPU)",
-            "description": "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X",
-            "node_selector": { "node-type": "strix-halo" },
-            "env": {}
+// Fetch user's quota information and accelerator config
+async function fetchUserQuota() {
+    try {
+        const headers = { 'X-XSRFToken': getXsrfToken() };
+        // Fetch quota info and accelerators in parallel
+        const [quotaResponse, acceleratorsResponse] = await Promise.all([
+            fetch('/hub/api/quota/me', { headers }),
+            fetch('/hub/api/accelerators', { headers })
+        ]);
+
+        if (quotaResponse.ok) {
+            userQuotaInfo = await quotaResponse.json();
         }
-    };
 
-const NPU_NODE_OPTIONS = {
-    "strix": {
-        "name": "strix",
-        "display_name": "AMD XDNA2 (Strix Point)",
-        "description": "AMD XDNA2 NPU with AI acceleration", 
-        "node_selector": {"type": "strix"}
+        // Merge accelerators from separate endpoint
+        if (acceleratorsResponse.ok) {
+            const acceleratorsData = await acceleratorsResponse.json();
+            userQuotaInfo.accelerators = acceleratorsData.accelerators || {};
+        }
+
+        displayQuotaBalance();
+        return userQuotaInfo;
+    } catch (e) {
+        console.log('Quota system not available or disabled');
     }
-};
+    return null;
+}
+
+// Display quota balance in the header
+function displayQuotaBalance() {
+    if (!userQuotaInfo.enabled) {
+        return;
+    }
+
+    const container = document.getElementById('quotaBalanceContainer');
+    const balanceEl = document.getElementById('quotaBalance');
+    const costPreview = document.getElementById('quotaCostPreview');
+    const simpleDisplay = document.getElementById('quotaDisplaySimple');
+    const simpleBalanceEl = document.getElementById('quotaBalanceSimple');
+
+    if (balanceEl) {
+        // Update hidden balance element (for data)
+        if (userQuotaInfo.unlimited) {
+            balanceEl.textContent = 'Unlimited';
+        } else {
+            balanceEl.textContent = userQuotaInfo.balance;
+        }
+    }
+
+    // Show simple quota display next to Launch button
+    if (simpleDisplay && simpleBalanceEl) {
+        if (userQuotaInfo.unlimited) {
+            simpleBalanceEl.textContent = 'Unlimited';
+            simpleBalanceEl.style.color = '#28a745';
+        } else {
+            simpleBalanceEl.textContent = userQuotaInfo.balance;
+            simpleBalanceEl.style.color = userQuotaInfo.balance < 10 ? '#dc3545' : '#5e81ac';
+        }
+        simpleDisplay.style.display = 'inline';
+    }
+
+    // Only show cost preview for non-unlimited users
+    if (costPreview && !userQuotaInfo.unlimited) {
+        costPreview.style.display = 'inline';
+    }
+
+    // Show warning if balance is too low (only for non-unlimited users)
+    if (!userQuotaInfo.unlimited && userQuotaInfo.balance < 10) {
+        const warning = document.getElementById('insufficientQuotaWarning');
+        if (warning) {
+            warning.style.display = 'block';
+        }
+    }
+
+    updateQuotaCostPreview();
+}
+
+// Update the cost preview when runtime or resource changes
+function updateQuotaCostPreview() {
+    if (!userQuotaInfo.enabled || userQuotaInfo.unlimited) {
+        return;
+    }
+
+    const runtimeInput = document.getElementById('runtimeInput');
+    const estimatedCostEl = document.getElementById('estimatedCost');
+    const remainingQuotaEl = document.getElementById('remainingQuota');
+
+    if (!runtimeInput || !estimatedCostEl || !remainingQuotaEl) {
+        return;
+    }
+
+    const minutes = parseInt(runtimeInput.value) || 20;
+    // Use accelerator type (gpu_selection) for rate lookup, not resource type
+    const rate = userQuotaInfo.rates[selectedAcceleratorType] || userQuotaInfo.rates['cpu'] || 1;
+    const cost = rate * minutes;
+    const remaining = userQuotaInfo.balance - cost;
+
+    estimatedCostEl.textContent = cost;
+    remainingQuotaEl.textContent = remaining;
+
+    // Update colors based on whether user can afford it
+    if (remaining < 0) {
+        estimatedCostEl.style.color = '#c62828';
+        remainingQuotaEl.style.color = '#c62828';
+    } else {
+        estimatedCostEl.style.color = '#2e7d32';
+        remainingQuotaEl.style.color = '#2e7d32';
+    }
+
+    // Update max runtime based on balance
+    if (rate > 0 && userQuotaInfo.balance > 0) {
+        const maxAffordable = Math.floor(userQuotaInfo.balance / rate);
+        runtimeInput.max = Math.min(240, maxAffordable);
+    }
+}
+
+// Called when a resource is selected
+function onResourceSelected(resourceType) {
+    selectedResourceType = resourceType;
+    updateQuotaCostPreview();
+}
+
+// Get accelerator info from backend API (via userQuotaInfo.accelerators)
+// This replaces hardcoded GPU_NODE_OPTIONS
+function getAcceleratorInfo(key) {
+    const acc = userQuotaInfo.accelerators?.[key];
+    if (acc) {
+        return {
+            name: key,
+            display_name: acc.displayName || key,
+            description: acc.description || '',
+            node_selector: acc.nodeSelector || {},
+            env: acc.env || {},
+            quota_rate: acc.quotaRate || 1
+        };
+    }
+    // Fallback for unknown accelerators
+    return { name: key, display_name: key, description: '', node_selector: {}, env: {}, quota_rate: 1 };
+}
+
+// Build GPU options object for specified accelerator keys
+function buildGpuOptions(keys) {
+    const options = {};
+    for (const key of keys) {
+        options[key] = getAcceleratorInfo(key);
+    }
+    return options;
+}
+
+// Predefined accelerator groups (which accelerators are available for each type)
+const GPU_ACCELERATORS = ["phx", "strix", "strix-halo", "dgpu"];
+const GFX1151_ACCELERATORS = ["strix-halo"];
+const NPU_ACCELERATORS = ["strix-npu"];
 
 const RESOURCE_SPECS = {
         "cpu": {
@@ -436,7 +570,7 @@ const RESOURCE_SPECS = {
         //     "memory": "8Gi",
         //     "accelerator": "NPU",
         //     "image": "ghcr.io/amdresearch/aup-mliraie-notebook:v1.0",
-        //     "gpu_options": NPU_NODE_OPTIONS
+        //     "accelerator_keys": NPU_ACCELERATORS
         // },
         "Course-CV": {
             "name": "Course-CV",
@@ -447,7 +581,7 @@ const RESOURCE_SPECS = {
             "memory": "16Gi",
             "accelerator": "GPU",
             "image": "ghcr.io/amdresearch/aup-course-cv:v1.3.1-TheRock",
-            "gpu_options": GFX1151_NODE_OPTIONS
+            "accelerator_keys": GFX1151_ACCELERATORS
         },
         "Course-DL": {
             "name": "Course-DL",
@@ -458,7 +592,7 @@ const RESOURCE_SPECS = {
             "memory": "16Gi",
             "accelerator": "GPU",
             "image": "ghcr.io/amdresearch/aup-course-dl:v1.3.1-TheRock",
-            "gpu_options": GFX1151_NODE_OPTIONS
+            "accelerator_keys": GFX1151_ACCELERATORS
         },
         "Course-LLM": {
             "name": "Course-LLM",
@@ -469,7 +603,7 @@ const RESOURCE_SPECS = {
             "memory": "16Gi",
             "accelerator": "GPU",
             "image": "ghcr.io/amdresearch/aup-course-llm:v1.3.1-TheRock",
-            "gpu_options": GFX1151_NODE_OPTIONS
+            "accelerator_keys": GFX1151_ACCELERATORS
         },
         "Tutorial-HIP-Intro": {
             "name": "Tutorial-HIP-Intro",
@@ -480,7 +614,7 @@ const RESOURCE_SPECS = {
             "memory": "8Gi",
             "accelerator": "GPU",
             "image": "ghcr.io/amdresearch/aup-tutorial-hip-intro:v1.0.1",
-            "gpu_options": GPU_NODE_OPTIONS
+            "accelerator_keys": GPU_ACCELERATORS
         },
         "Tutorial-LLM-Lemonade": {
             "name": "Tutorial-LLM-Lemonade",
@@ -491,7 +625,7 @@ const RESOURCE_SPECS = {
             "memory": "8Gi",
             "accelerator": "GPU",
             "image": "ghcr.io/amdresearch/aup-tutorial-llm-lemonade:v1.3",
-            "gpu_options": GFX1151_NODE_OPTIONS
+            "accelerator_keys": GFX1151_ACCELERATORS
         },
         "Tutorial-LLM-Ollama": {
         "name": "Tutorial-LLM-Ollama",
@@ -502,7 +636,7 @@ const RESOURCE_SPECS = {
         "memory": "8Gi",
         "accelerator": "GPU",
         "image": "ghcr.io/amdresearch/aup-tutorial-llm-ollama:v1.0",
-        "gpu_options": GFX1151_NODE_OPTIONS
+        "accelerator_keys": GFX1151_ACCELERATORS
     },
         "Tutorial-NPU-Resnet": {
             "name": "Tutorial-NPU-Resnet",
@@ -513,7 +647,7 @@ const RESOURCE_SPECS = {
             "memory": "8Gi",
             "accelerator": "NPU",
             "image": "ghcr.io/amdresearch/aup-tutorial-npu-resnet:v1.4-onnx-notebook",
-            "gpu_options": NPU_NODE_OPTIONS
+            "accelerator_keys": NPU_ACCELERATORS
         },
         "none": {
             "name": "cpu",
@@ -533,7 +667,7 @@ const RESOURCE_SPECS = {
         "memory": "16Gi",
         "accelerator": "GPU",
         "image": "ghcr.io/amdresearch/aup-roscon2025-gpu:v1.0",
-        "gpu_options": ROSCON2025_NODE_OPTIONS
+        "accelerator_keys": GFX1151_ACCELERATORS
         },
         "ROSCON2025-NPU": {
         "name": "ROSCON2025-NPU",
@@ -544,7 +678,7 @@ const RESOURCE_SPECS = {
         "memory": "16Gi",
         "accelerator": "NPU",
         "image": "ghcr.io/amdresearch/aup-roscon2025-npu:v1.0",
-        "gpu_options": ROSCON2025_NODE_OPTIONS
+        "accelerator_keys": GFX1151_ACCELERATORS
         },
         "ROSCON2025-DIGIT": {
         "name": "ROSCON2025-DIGIT",
@@ -555,7 +689,7 @@ const RESOURCE_SPECS = {
         "memory": "16Gi",
         "accelerator": "GPU",
         "image": "ghcr.io/amdresearch/aup-roscon2025-digit:v1.0",
-        "gpu_options": ROSCON2025_NODE_OPTIONS
+        "accelerator_keys": GFX1151_ACCELERATORS
         },
     };
 
@@ -593,18 +727,20 @@ function formatResourceDescription(cpu, memory, accelerator = null) {
 
 function createResourceHTML(resource) {
     const resourceString = formatResourceDescription(resource.cpu, resource.memory, resource.accelerator);
-    
+
     let gpuSelectionHTML = '';
-    if (resource.gpu_options) {
+    if (resource.accelerator_keys && resource.accelerator_keys.length > 0) {
+        // Build GPU options dynamically from backend accelerator config
+        const gpuOptions = buildGpuOptions(resource.accelerator_keys);
         gpuSelectionHTML = `
             <div id="gpu_selection_${resource.name}" class="gpu-selection">
                 <h6>Choose ${resource.accelerator} Node:</h6>
                 <div class="gpu-options-container">
-                    ${Object.entries(resource.gpu_options).map(([gpuKey, gpuOption], index) => `
+                    ${Object.entries(gpuOptions).map(([gpuKey, gpuOption], index) => `
                         <div class="gpu-option" onclick="selectGpuOption('${resource.name}', '${gpuKey}', event);">
-                            <input type="radio" 
-                                   id="gpu_${resource.name}_${gpuKey}" 
-                                   name="gpu_selection_${resource.name}" 
+                            <input type="radio"
+                                   id="gpu_${resource.name}_${gpuKey}"
+                                   name="gpu_selection_${resource.name}"
                                    value="${gpuKey}"
                                    ${index === 0 ? 'checked' : ''}
                                    onclick="event.stopPropagation();">
@@ -651,7 +787,11 @@ function createResourceHTML(resource) {
 
     async function loadResources() {
         try {
-            const availableResourceNames = await fetchAvailableResources();
+            // Fetch resources and quota info in parallel
+            const [availableResourceNames, quotaInfo] = await Promise.all([
+                fetchAvailableResources(),
+                fetchUserQuota()
+            ]);
             const resourceListElement = document.getElementById('resourceList');
 
             if (availableResourceNames.length === 0) {
@@ -703,6 +843,19 @@ function createResourceHTML(resource) {
             }
 
             document.getElementById('resourceForm').style.display = 'block';
+
+            // Hide runtime selector in single-node mode
+            if (window.SINGLE_NODE_MODE) {
+                const runtimeContainer = document.getElementById('runtimeContainer');
+                if (runtimeContainer) {
+                    runtimeContainer.style.display = 'none';
+                }
+                // Set a large default runtime value for single-node mode
+                const runtimeInput = document.getElementById('runtimeInput');
+                if (runtimeInput) {
+                    runtimeInput.value = 99999;
+                }
+            }
         } catch (error) {
             console.error('Error loading resources:', error);
             document.getElementById('noResources').style.display = 'block';
@@ -715,10 +868,13 @@ function createResourceHTML(resource) {
 function selectResource(resourceName) {
     // Select the radio button
     document.getElementById(resourceName).checked = true;
-    
+
     // Toggle GPU selection visibility
     toggleGpuSelection(resourceName);
-    
+
+    // Update quota cost preview
+    onResourceSelected(resourceName);
+
     // Enable the Start button
     enableStartButton();
 }
@@ -729,25 +885,43 @@ function toggleGpuSelection(selectedResource) {
     allGpuSelections.forEach(selection => {
         selection.style.display = 'none';
     });
-    
+
     // Show GPU selection for the selected resource
     const selectedGpuSelection = document.getElementById('gpu_selection_' + selectedResource);
     if (selectedGpuSelection) {
         selectedGpuSelection.style.display = 'block';
-        
+
         // Ensure first GPU option is selected by default
         const firstGpuOption = selectedGpuSelection.querySelector('input[type="radio"]');
         if (firstGpuOption && !selectedGpuSelection.querySelector('input[type="radio"]:checked')) {
             firstGpuOption.checked = true;
         }
+
+        // Update accelerator type based on selected/default GPU option
+        const checkedGpuOption = selectedGpuSelection.querySelector('input[type="radio"]:checked');
+        if (checkedGpuOption) {
+            // Extract GPU key from radio id (format: gpu_resourceName_gpuKey)
+            const parts = checkedGpuOption.id.split('_');
+            selectedAcceleratorType = parts[parts.length - 1];
+        }
+    } else {
+        // No GPU options for this resource, use 'cpu'
+        selectedAcceleratorType = 'cpu';
     }
+
+    // Update quota preview with new accelerator type
+    updateQuotaCostPreview();
 }
 
 function selectGpuOption(resourceName, gpuKey, event) {
     event.stopPropagation();
-    
+
     // Select the GPU radio button
     document.getElementById('gpu_' + resourceName + '_' + gpuKey).checked = true;
+
+    // Update selected accelerator type for quota calculation
+    selectedAcceleratorType = gpuKey;
+    updateQuotaCostPreview();
 }
 
 // Toggle category collapse/expand

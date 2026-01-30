@@ -26,7 +26,7 @@ import 'bootstrap-icons/font/bootstrap-icons.css';
 
 function App() {
   // Get base URL from window.jhdata (set by JupyterHub)
-  const jhdata = (window as any).jhdata || {};
+  const jhdata = window.jhdata ?? {};
   const baseUrl = (jhdata.base_url || '/hub/').replace(/\/+$/, ''); // Remove trailing slash
   const basePath = `${baseUrl}/admin`;
 
