@@ -250,12 +250,15 @@ Click directly on a user's quota value to edit:
 
 1. Select multiple users using checkboxes
 2. Click "Set Quota" button (appears when users are selected)
+
+![Batch Select Users](../imgs/jupyterhub/quota-3-batch-select.png)
+
 3. Enter the quota value:
    - A number (e.g., `500`) to set exact balance
    - `-1`, `∞`, or `unlimited` to grant unlimited status
 4. Click "Apply" to update all selected users
 
-![Batch Quota Operation](../imgs/jupyterhub/quota-3-batch-operation.png)
+![Batch Quota Modal](../imgs/jupyterhub/quota-4-batch-modal.png)
 
 ### REST API Endpoints
 
