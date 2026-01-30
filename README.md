@@ -143,6 +143,9 @@ Current environments are set up as `RESOURCE_IMAGES` in `runtime/jupyterhub/file
 ## Documentation
 
 - [JupyterHub Configuration](docs/jupyterhub/README.md) - Detailed JupyterHub settings
+- [Authentication Guide](docs/jupyterhub/authentication-guide.md) - GitHub OAuth and native authentication
+- [User Management Guide](docs/jupyterhub/user-management.md) - Batch user operations with scripts
+- [User Quota System](docs/jupyterhub/quota-system.md) - Resource usage tracking and quota management
 - [GitHub OAuth Setup](docs/jupyterhub/How_to_Setup_GitHub_OAuth.md) - OAuth configuration
 - [Maintenance Manual](docs/user-manual/aup-remote-lab-user-manual-admin-new.md) - Operations guide
 
