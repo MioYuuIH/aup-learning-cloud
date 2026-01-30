@@ -262,27 +262,14 @@ def get_quota_rate(accelerator_type: str | None) -> int:
 # Config: custom.quota.minimumToStart (int)
 MINIMUM_QUOTA_TO_START = int(z2jh_get_config("custom.quota.minimumToStart", 10))
 
-# Default quota for new users
+# Default quota for new users (0 = no quota granted, must be set by admin)
 # Config: custom.quota.defaultQuota (int)
 DEFAULT_QUOTA = int(z2jh_get_config("custom.quota.defaultQuota", 0))
-
-# Grant unlimited quota to new users by default
-# Config: custom.quota.defaultUnlimited (bool)
-DEFAULT_UNLIMITED = bool(z2jh_get_config("custom.quota.defaultUnlimited", False))
-
-# Admin users have unlimited quota (no quota deduction)
-# Config: custom.quota.adminsUnlimited (bool)
-QUOTA_ADMINS_UNLIMITED = bool(z2jh_get_config("custom.quota.adminsUnlimited", True))
-
-# List of usernames with unlimited quota (case-insensitive)
-# Config: custom.quota.unlimitedUsers (list)
-QUOTA_UNLIMITED_USERS: list[str] = z2jh_get_config_list("custom.quota.unlimitedUsers", [])
 
 if QUOTA_ENABLED:
     print(f"[CONFIG] Quota rates by accelerator: {QUOTA_RATES}")
     print(f"[CONFIG] Quota minimum to start: {MINIMUM_QUOTA_TO_START}")
-    print(f"[CONFIG] Quota default for new users: {DEFAULT_QUOTA}" + (" (unlimited)" if DEFAULT_UNLIMITED else ""))
-    print(f"[CONFIG] Quota admins unlimited: {QUOTA_ADMINS_UNLIMITED}, unlimited users: {QUOTA_UNLIMITED_USERS}")
+    print(f"[CONFIG] Quota default for new users: {DEFAULT_QUOTA}")
 
 LOCAL_ACCOUNT_PREFIX = "LocalAccount"
 LOCAL_ACCOUNT_PREFIX_UPPER = LOCAL_ACCOUNT_PREFIX.upper()
@@ -1028,14 +1015,11 @@ class UserQuotaInfoHandler(APIHandler):
         from quota_manager import get_quota_manager
 
         username = self.current_user.name
-        is_admin = getattr(self.current_user, "admin", False)
         quota_manager = get_quota_manager()
         balance = quota_manager.get_balance(username)
 
         # Check if user has unlimited quota
-        has_unlimited = quota_manager.has_unlimited_quota(
-            username, is_admin, QUOTA_ADMINS_UNLIMITED, QUOTA_UNLIMITED_USERS
-        )
+        has_unlimited = quota_manager.is_unlimited_in_db(username)
 
         self.set_header("Content-Type", "application/json")
         self.finish(
@@ -1617,12 +1601,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
             from quota_manager import get_quota_manager
 
             quota_manager = get_quota_manager()
-            is_admin = getattr(self.user, "admin", False)
 
             # Check if user has unlimited quota
-            has_unlimited = quota_manager.has_unlimited_quota(
-                username, is_admin, QUOTA_ADMINS_UNLIMITED, QUOTA_UNLIMITED_USERS
-            )
+            has_unlimited = quota_manager.is_unlimited_in_db(username)
 
             if has_unlimited:
                 print(f"[QUOTA] User {username} has unlimited quota, skipping quota check")
@@ -1634,11 +1615,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
                     accelerator_type,
                     runtime_minutes,
                     QUOTA_RATES,
-                    is_admin,
-                    QUOTA_ADMINS_UNLIMITED,
-                    QUOTA_UNLIMITED_USERS,
                     DEFAULT_QUOTA,
-                    DEFAULT_UNLIMITED,
                 )
 
                 if not can_start:

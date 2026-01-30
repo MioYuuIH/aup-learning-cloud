@@ -128,45 +128,22 @@ class QuotaManager:
             row = cursor.fetchone()
             return row["balance"] if row else 0
 
-    def ensure_user_quota(self, username: str, default_quota: int = 0, default_unlimited: bool = False) -> int:
+    def ensure_user_quota(self, username: str, default_quota: int = 0) -> int:
         """
-        Ensure user has a quota record. If user doesn't exist:
-        - If default_unlimited=True, grant unlimited quota
-        - Else if default_quota > 0, grant the default quota amount
-        Returns the user's current balance.
+        Ensure user has a quota record. If user doesn't exist and default_quota > 0,
+        grant the default quota amount. Returns the user's current balance.
         """
         username = username.lower()
         with self._lock, self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT balance, unlimited FROM user_quota WHERE username = ?", (username,))
+            cursor.execute("SELECT balance FROM user_quota WHERE username = ?", (username,))
             row = cursor.fetchone()
 
             if row:
                 # User already exists
                 return row["balance"]
 
-            # New user - check if we should grant unlimited quota
-            if default_unlimited:
-                cursor.execute(
-                    """
-                    INSERT INTO user_quota (username, balance, unlimited)
-                    VALUES (?, 0, 1)
-                """,
-                    (username,),
-                )
-                cursor.execute(
-                    """
-                    INSERT INTO quota_transactions
-                    (username, amount, transaction_type, balance_before, balance_after, description)
-                    VALUES (?, 0, 'initial_grant', 0, 0, 'Initial grant: unlimited quota')
-                """,
-                    (username,),
-                )
-                conn.commit()
-                print(f"[QUOTA] New user '{username}' granted unlimited quota")
-                return 0
-
-            # New user - check if we should grant default quota
+            # New user - grant default quota if configured
             if default_quota > 0:
                 cursor.execute(
                     """
@@ -349,28 +326,11 @@ class QuotaManager:
             conn.commit()
             return unlimited
 
-    def has_unlimited_quota(
-        self,
-        username: str,
-        is_admin: bool = False,
-        admins_unlimited: bool = True,
-        unlimited_users: list[str] | None = None,
-    ) -> bool:
+    def has_unlimited_quota(self, username: str) -> bool:
         """
         Check if user has unlimited quota.
-        Returns True if:
-        - User is admin and admins_unlimited is True
-        - User is in the unlimited_users config list
-        - User is marked as unlimited in the database
+        Only checks the database - unlimited status is managed via admin UI.
         """
-        username = username.lower()
-        # Check config: admin unlimited
-        if is_admin and admins_unlimited:
-            return True
-        # Check config: unlimited users list
-        if unlimited_users and username in [u.lower() for u in unlimited_users]:
-            return True
-        # Check database
         return self.is_unlimited_in_db(username)
 
     def can_start_container(
@@ -379,11 +339,7 @@ class QuotaManager:
         resource_type: str,
         duration_minutes: int,
         quota_rates: dict,
-        is_admin: bool = False,
-        admins_unlimited: bool = True,
-        unlimited_users: list[str] | None = None,
         default_quota: int = 0,
-        default_unlimited: bool = False,
     ) -> tuple[bool, str, int]:
         """
         Check if user has sufficient quota to start a container.
@@ -394,11 +350,10 @@ class QuotaManager:
         estimated_cost = rate * duration_minutes
 
         # Ensure user has a quota record (grant default if new user)
-        # Must be called BEFORE has_unlimited_quota check to create DB record for new users
-        balance = self.ensure_user_quota(username, default_quota, default_unlimited)
+        balance = self.ensure_user_quota(username, default_quota)
 
-        # Check for unlimited quota (includes newly granted unlimited users)
-        if self.has_unlimited_quota(username, is_admin, admins_unlimited, unlimited_users):
+        # Check for unlimited quota
+        if self.has_unlimited_quota(username):
             return True, "Unlimited quota", 0
 
         if balance < estimated_cost:

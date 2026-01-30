@@ -30,18 +30,11 @@ custom:
     cpuRate: 1                 # Cost per minute for CPU-only containers
     minimumToStart: 10         # Minimum quota required to start any container
     defaultQuota: 0            # Default quota granted to new users (0 = no initial allocation)
-    defaultUnlimited: false    # Grant unlimited quota to new users (overrides defaultQuota)
-    adminsUnlimited: true      # Admin users have unlimited quota
-    unlimitedUsers: []         # List of usernames with unlimited quota
 ```
 
 ### New User Default Quota
 
-Two settings control quota allocation for new users:
-
-#### defaultQuota
-
-Controls how much quota new users receive automatically:
+The `defaultQuota` setting controls how much quota new users receive automatically:
 
 - **Value `0` (default)**: New users start with zero quota and must be manually granted quota by an administrator
 - **Value `> 0`**: New users are automatically granted this amount when they first attempt to use the system
@@ -53,35 +46,20 @@ custom:
     defaultQuota: 100  # Automatically grant 100 quota units to new users
 ```
 
-#### defaultUnlimited
-
-Grant unlimited quota to all new users:
-
-- **Value `false` (default)**: New users receive quota based on `defaultQuota` setting
-- **Value `true`**: New users are automatically granted unlimited quota (overrides `defaultQuota`)
-
-**Example configuration:**
-```yaml
-custom:
-  quota:
-    defaultUnlimited: true  # All new users get unlimited quota
-```
-
 #### How It Works
 
 This automatic allocation happens when a new user first tries to start a container. The system will:
 1. Check if the user has a quota record in the database
-2. If not found:
-   - If `defaultUnlimited: true`, create a record with unlimited quota status
-   - Else if `defaultQuota > 0`, create a record with the default amount
-   - Otherwise, create a record with zero quota
+2. If not found and `defaultQuota > 0`, create a record with the default amount
 3. Record this as an "initial_grant" transaction in the audit log
 
-**Priority order:**
-1. Admin users (if `adminsUnlimited: true`)
-2. Users in `unlimitedUsers` list
-3. New users with `defaultUnlimited: true`
-4. New users with `defaultQuota` value
+### Unlimited Quota
+
+Unlimited quota status is managed via the Admin UI. To grant unlimited quota to a user:
+1. Go to the Admin Panel (`/hub/admin/users`)
+2. Click on the user's quota value
+3. Enter `-1`, `∞`, or `unlimited` in the input field
+4. Click Save
 
 ### Quota Rates by Resource Type
 
@@ -585,11 +563,7 @@ Sessions stuck for more than 8 hours are automatically cleaned up on hub startup
 
 ### Unlimited Quota Logic
 
-A user has unlimited quota if ANY of these conditions are true:
-
-1. User is admin AND `adminsUnlimited: true` in config
-2. Username is in `unlimitedUsers` config list (case-insensitive)
-3. User is marked `unlimited: true` in database
+A user has unlimited quota if marked `unlimited: true` in the database.
 
 ## Troubleshooting
 
@@ -608,20 +582,14 @@ A user has unlimited quota if ANY of these conditions are true:
    python scripts/manage_users.py add-quota username --amount 500
    ```
 
-3. Or grant unlimited quota via API:
-   ```bash
-   curl -X POST "$JUPYTERHUB_URL/admin/api/quota/username" \
-     -H "Authorization: token $JUPYTERHUB_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"action": "set_unlimited", "unlimited": true}'
-   ```
+3. Or grant unlimited quota via Admin UI (click quota value and enter `∞`)
 
 ### Quota Not Being Deducted
 
 **Symptom:** User's balance doesn't decrease after container use
 
 **Possible causes:**
-1. User has unlimited quota (admin, in unlimitedUsers list, or marked unlimited)
+1. User has unlimited quota (set via Admin UI)
 2. Quota system is disabled (`custom.quota.enabled: false`)
 3. Session ended abnormally (cleaned up as stale)
 
