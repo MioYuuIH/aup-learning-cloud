@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 K3S_IMAGES_DIR ?= /var/lib/rancher/k3s/agent/images
 
-.PHONY: all base base-cpu base-gfx1151 hub courses cv dl llm
+.PHONY: all base base-cpu base-gfx1151 hub courses cv dl llm physim
 
 # Build all images
 all: base hub courses
@@ -33,18 +33,18 @@ hub:
 	 	echo "Building Hub Image..."; \
 		echo "-------------------------------------------";
 
-	cd Hub && bash ./build.sh
+	cd Hub && ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-hub:latest
 
 # --- Course Images ---
-courses: cv dl llm
+courses: cv dl llm physim
 
 cv:
 	@echo "-------------------------------------------"; \
 		echo "Building CV Course Image..."; \
 		echo "-------------------------------------------";
 
-	cd Courses/CV && bash ./build.sh
+	cd Courses/CV && ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-cv:latest
 
 dl:
@@ -52,7 +52,7 @@ dl:
 		echo "Building DL Course Image..."; \
 		echo "-------------------------------------------";
 
-	cd Courses/DL && bash ./build.sh
+	cd Courses/DL && ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-dl:latest
 
 llm:
@@ -60,8 +60,16 @@ llm:
 		echo "Building LLM Course Image..."; \
 		echo "-------------------------------------------";
 
-	cd Courses/LLM && bash ./build.sh
+	cd Courses/LLM && ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-llm:latest
+
+physim:
+	@echo "-------------------------------------------"; \
+		echo "Building PhySim Course Image..."; \
+		echo "-------------------------------------------";
+
+	cd Courses/PhySim && ./build.sh
+	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-physim:latest
 
 # --- Export Images ---
 save-image:
