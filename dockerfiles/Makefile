@@ -81,6 +81,7 @@ save-image:
 		echo "-------------------------------------------"; \
 		echo "Export: $(IMAGE)"; \
 		echo "Save to : $$out_path"; \
+		sudo rm -f $$out_path; \
 		sudo docker save "$(IMAGE)" -o "$$out_path" && echo "✅ Success" || (echo "❌ ERROR"; exit 1); \
 		echo "-------------------------------------------"; \
 	else \
