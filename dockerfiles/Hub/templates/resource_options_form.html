@@ -73,7 +73,7 @@ SOFTWARE.
             background: var(--jp-layout-color1) !important;
         }
     }
-    
+
     .gpu-selection {
         margin-top: 15px;
         margin-left: 40px;
@@ -84,32 +84,32 @@ SOFTWARE.
         display: none;
         box-shadow: 0 3px 8px rgba(0,0,0,0.06);
     }
-    
+
     .gpu-options-container {
         max-height: 180px; /* Height for approximately 3 options */
         overflow-y: auto;
         padding-right: 5px;
     }
-    
+
     /* Scrollbar styling */
     .gpu-options-container::-webkit-scrollbar {
         width: 6px;
     }
-    
+
     .gpu-options-container::-webkit-scrollbar-track {
         background: #f1f1f1;
         border-radius: 10px;
     }
-    
+
     .gpu-options-container::-webkit-scrollbar-thumb {
         background: #c1c9d6;
         border-radius: 10px;
     }
-    
+
     .gpu-options-container::-webkit-scrollbar-thumb:hover {
         background: #a1aebf;
     }
-    
+
     .gpu-selection h6 {
         color: #2e3440;
         font-size: 1rem;
@@ -119,7 +119,7 @@ SOFTWARE.
         font-weight: 600;
         position: relative;
     }
-    
+
     .gpu-selection h6::after {
         content: '';
         position: absolute;
@@ -129,7 +129,7 @@ SOFTWARE.
         height: 2px;
         background: #5e81ac;
     }
-    
+
     .gpu-option {
         margin: 10px 0;
         padding: 14px 16px;
@@ -142,40 +142,40 @@ SOFTWARE.
         position: relative;
         overflow: hidden;
     }
-    
+
     .gpu-option:hover {
         background: #eceff4;
         border-color: #5e81ac;
     }
-    
+
     .gpu-option:active {
         transform: translateY(0);
     }
-    
+
     .gpu-option input[type="radio"] {
         margin-right: 12px;
         width: 18px;
         height: 18px;
         accent-color: #5e81ac;
     }
-    
+
     .gpu-option-details {
         flex: 1;
     }
-    
+
     .gpu-option-name {
         font-weight: 600;
         color: #2e3440;
         margin-bottom: 4px;
         font-size: 0.95rem;
     }
-    
+
     .gpu-option-desc {
         font-size: 0.85rem;
         color: #4c566a;
         line-height: 1.4;
     }
-    
+
     .gpu-option.selected {
         background: #e5e9f0;
         border-color: #5e81ac;
@@ -198,7 +198,7 @@ SOFTWARE.
         animation: spin 1s ease-in-out infinite;
         margin-right: 12px;
     }
-    
+
     /* Collapsible section styles */
     .resource-category {
         margin-bottom: 20px;
@@ -207,11 +207,11 @@ SOFTWARE.
         overflow: hidden;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    
+
     .resource-category:hover {
         box-shadow: 0 2px 5px rgba(0,0,0,0.08);
     }
-    
+
     .resource-category-header {
         display: flex;
         align-items: center;
@@ -221,11 +221,11 @@ SOFTWARE.
         cursor: pointer;
         border-bottom: 1px solid #e0e0e0;
     }
-    
+
     .resource-category-header:hover {
         background: linear-gradient(to right, #eef1f5, #e8ecf2);
     }
-    
+
     .resource-category-header h5 {
         margin: 0;
         color: #2c3e50;
@@ -234,7 +234,7 @@ SOFTWARE.
         display: flex;
         align-items: center;
     }
-    
+
     /* Removed bullet point
     .resource-category-header h5::before {
         content: '';
@@ -246,7 +246,7 @@ SOFTWARE.
         background-color: #5e81ac;
     }
     */
-    
+
     .collapse-icon {
         font-size: 16px;
         transition: transform 0.2s ease;
@@ -257,11 +257,11 @@ SOFTWARE.
         align-items: center;
         justify-content: center;
     }
-    
+
     .collapsed .collapse-icon {
         transform: rotate(-90deg);
     }
-    
+
     .collapsible-content {
         max-height: 1000px;
         overflow: hidden;
@@ -269,7 +269,7 @@ SOFTWARE.
         background: #ffffff;
         padding: 20px;
     }
-    
+
     .collapsed .collapsible-content {
         max-height: 0;
         padding: 0;
@@ -279,7 +279,7 @@ SOFTWARE.
     @keyframes spin {
         to { transform: rotate(360deg); }
     }
-    
+
     /* Scroll to bottom button styles */
     .scroll-to-bottom {
         position: fixed;
@@ -300,11 +300,11 @@ SOFTWARE.
         transition: opacity 0.3s, visibility 0.3s;
         z-index: 1000;
     }
-    
+
     .scroll-to-bottom:hover {
         background-color: #4c6c94;
     }
-    
+
     .scroll-to-bottom.visible {
         opacity: 1;
         visibility: visible;
@@ -334,12 +334,12 @@ SOFTWARE.
     <div id="resourceList">
         <!-- Resources will be dynamically loaded here -->
     </div>
-    
+
     <div id="noResources" style="padding: 20px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; color: #856404; display: none;">
         <strong>No resources available</strong><br>
         Please contact administrator for access.
     </div>
-    
+
     <div id="runtimeContainer" style="margin-top: 30px; padding-top: 25px; border-top: 1px solid #e0e0e0; display: flex; align-items: center; flex-wrap: wrap;">
         <label for="runtime" style="color: #2c3e50; margin-right: 15px; font-weight: 500;">Run my server for (minutes):</label>
         <input name="runtime"
@@ -553,7 +553,7 @@ const NPU_ACCELERATORS = ["strix-npu"];
 const RESOURCE_SPECS = {
         "cpu": {
             "name": "cpu",
-            "group": "OTHERS", 
+            "group": "OTHERS",
             "description": "Basic Python Environment",
             "sub_description": "CPU Only Environment",
             "cpu": "2",
@@ -563,7 +563,7 @@ const RESOURCE_SPECS = {
         },
         // "mlir-aie": {
         //     "name": "mlir-aie",
-        //     "group": "OTHERS", 
+        //     "group": "OTHERS",
         //     "description": "IRON NPU Compiler (Alpha Test)",
         //     "sub_description": "Suitable for advanced AIE applications",
         //     "cpu": "4",
@@ -574,7 +574,7 @@ const RESOURCE_SPECS = {
         // },
         "Course-CV": {
             "name": "Course-CV",
-            "group": "COURSE", 
+            "group": "COURSE",
             "description": "Computer Vision Course",
             "sub_description": "Suitable for CV experiments with GPU",
             "cpu": "4",
@@ -585,7 +585,7 @@ const RESOURCE_SPECS = {
         },
         "Course-DL": {
             "name": "Course-DL",
-            "group": "COURSE", 
+            "group": "COURSE",
             "description": "Deep Learning Course",
             "sub_description": "Suitable for DL experiments with GPU",
             "cpu": "4",
@@ -596,7 +596,7 @@ const RESOURCE_SPECS = {
         },
         "Course-LLM": {
             "name": "Course-LLM",
-            "group": "COURSE", 
+            "group": "COURSE",
             "description": "Large Language Models Course",
             "sub_description": "Suitable for LLM experiments with GPU",
             "cpu": "4",
@@ -605,9 +605,20 @@ const RESOURCE_SPECS = {
             "image": "ghcr.io/amdresearch/aup-course-llm:v1.3.1-TheRock",
             "accelerator_keys": GFX1151_ACCELERATORS
         },
+        "Course-PhySim": {
+            "name": "Course-PhySim",
+            "group": "COURSE",
+            "description": "Genesis Physical Simulation Course",
+            "sub_description": "Suitable for physical simulation experiments with GPU",
+            "cpu": "4",
+            "memory": "16Gi",
+            "accelerator": "GPU",
+            "image": "ghcr.io/amdresearch/aup-course-llm:v1.3.1-TheRock",
+            "accelerator_keys": GFX1151_ACCELERATORS
+        },
         "Tutorial-HIP-Intro": {
             "name": "Tutorial-HIP-Intro",
-            "group": "TUTORIAL", 
+            "group": "TUTORIAL",
             "description": "HIP Introduction Tutorial",
             "sub_description": "Suitable for learning HIP programming",
             "cpu": "4",
@@ -618,7 +629,7 @@ const RESOURCE_SPECS = {
         },
         "Tutorial-LLM-Lemonade": {
             "name": "Tutorial-LLM-Lemonade",
-            "group": "TUTORIAL", 
+            "group": "TUTORIAL",
             "description": "LLM Lemonade Tutorial",
             "sub_description": "Suitable for LLM hands-on exercises",
             "cpu": "4",
@@ -640,7 +651,7 @@ const RESOURCE_SPECS = {
     },
         "Tutorial-NPU-Resnet": {
             "name": "Tutorial-NPU-Resnet",
-            "group": "TUTORIAL", 
+            "group": "TUTORIAL",
             "description": "NPU ResNet Tutorial",
             "sub_description": "Suitable for ResNet inference on NPU",
             "cpu": "4",
@@ -699,7 +710,7 @@ async function fetchAvailableResources() {
     if (window.AVAILABLE_RESOURCES) {
         return window.AVAILABLE_RESOURCES;
     }
-    
+
     // If not, try to read from hidden element
     const resourcesElement = document.getElementById('available-resources-data');
     if (resourcesElement) {
@@ -709,10 +720,10 @@ async function fetchAvailableResources() {
             console.error('Failed to parse available resources:', e);
         }
     }
-    
+
     // Simulate API delay (for development)
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     // Return all resources by default (for development/testing)
     return ["cpu", "rocm", "torch", "ryzenai-onnx"];
 }
@@ -754,22 +765,22 @@ function createResourceHTML(resource) {
             </div>
         `;
     }
-    
+
     return `
-        <div class="resource-container" 
-             style="margin-bottom: 14px; padding: 16px; border: 1px solid #e0e0e0; border-radius: 10px; display: flex; flex-direction: column; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer;" 
-             onmouseover="this.style.backgroundColor='#f9fafb';" 
-             onmouseout="this.style.backgroundColor='white';" 
+        <div class="resource-container"
+             style="margin-bottom: 14px; padding: 16px; border: 1px solid #e0e0e0; border-radius: 10px; display: flex; flex-direction: column; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer;"
+             onmouseover="this.style.backgroundColor='#f9fafb';"
+             onmouseout="this.style.backgroundColor='white';"
              onclick="selectResource('${resource.name}');">
-            
+
             <div style="display: flex; align-items: center;">
-                <input type="radio" 
-                       id="${resource.name}" 
-                       name="resource_type" 
-                       value="${resource.name}" 
+                <input type="radio"
+                       id="${resource.name}"
+                       name="resource_type"
+                       value="${resource.name}"
                        style="margin-right: 15px; width: 16px; height: 16px; accent-color: #6c7a89;"
                        onchange="toggleGpuSelection('${resource.name}');">
-                
+
                 <div style="flex: 1;">
                     <strong style="display: block; font-size: 15px; color: #2c3e50; margin-bottom: 4px;">${resource.description}</strong>
                     <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
@@ -779,7 +790,7 @@ function createResourceHTML(resource) {
                     </div>
                 </div>
             </div>
-            
+
             ${gpuSelectionHTML}
         </div>
     `;
@@ -930,7 +941,7 @@ function toggleCategory(categoryId) {
     const category = document.getElementById(categoryId);
     if (category) {
         const isCurrentlyCollapsed = category.classList.contains('collapsed');
-        
+
         // First collapse all categories
         const allCategories = document.querySelectorAll('.resource-category');
         allCategories.forEach(cat => {
@@ -938,7 +949,7 @@ function toggleCategory(categoryId) {
             const catId = cat.id;
             localStorage.setItem(catId + '-collapsed', true);
         });
-        
+
         // Then expand the clicked one if it was collapsed
         if (isCurrentlyCollapsed) {
             category.classList.remove('collapsed');
@@ -955,7 +966,7 @@ function setInitialCategoryStates() {
         cpuCategory.classList.remove('collapsed');
         localStorage.setItem('cpu-category-collapsed', false);
     }
-    
+
     // Set GPU and NPU to collapsed in localStorage
     localStorage.setItem('gpu-category-collapsed', true);
     localStorage.setItem('npu-category-collapsed', true);
@@ -964,20 +975,20 @@ function setInitialCategoryStates() {
 // Clear selection when clicking elsewhere on the page
 document.addEventListener('click', function(event) {
     // Check if the click is outside any gpu-option, resource-container, or scroll-to-bottom button
-    if (!event.target.closest('.gpu-option') && 
-        !event.target.closest('.resource-container') && 
+    if (!event.target.closest('.gpu-option') &&
+        !event.target.closest('.resource-container') &&
         !event.target.closest('.scroll-to-bottom')) {
-        
+
         // Clear all radio button selections
         document.querySelectorAll('input[type="radio"]').forEach(radio => {
             radio.checked = false;
         });
-        
+
         // Hide all GPU selection panels
         document.querySelectorAll('.gpu-selection').forEach(selection => {
             selection.style.display = 'none';
         });
-        
+
         // Disable the Start button
         disableStartButton();
     }
@@ -1006,7 +1017,7 @@ function disableStartButton() {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadResources();
-    
+
     // Set initial category states immediately after resources are loaded
     document.getElementById('resourceForm').addEventListener('DOMNodeInserted', function handler() {
         if (document.getElementById('cpu-category')) {
@@ -1015,17 +1026,17 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('resourceForm').removeEventListener('DOMNodeInserted', handler);
         }
     });
-    
+
     // Add event listeners to all radio buttons to enable the Start button
     document.addEventListener('change', function(event) {
         if (event.target.type === 'radio') {
             enableStartButton();
         }
     });
-    
+
     // Scroll to bottom button functionality
     const scrollToBottomBtn = document.getElementById('scrollToBottom');
-    
+
     // Show button when page is scrolled down
     window.addEventListener('scroll', function() {
         // Check if page height exceeds viewport height
@@ -1038,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    
+
     // Scroll to bottom when button is clicked
     scrollToBottomBtn.addEventListener('click', function() {
         window.scrollTo({
@@ -1046,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', function() {
             behavior: 'smooth'
         });
     });
-    
+
     // Initial check if scroll button should be visible
     if (document.body.scrollHeight > window.innerHeight) {
         if (window.scrollY > 100) {
