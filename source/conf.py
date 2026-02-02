@@ -31,7 +31,7 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'furo'
 html_static_path = ['_static']
 
 # MyST parser settings
@@ -45,15 +45,22 @@ myst_enable_extensions = [
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
 
-# Theme options
+# Furo theme options
 html_theme_options = {
-    'navigation_depth': 4,
-    'collapse_navigation': False,
-    'sticky_navigation': True,
-    'includehidden': True,
-    'titles_only': False,
-    'display_version': True,
+    "light_css_variables": {
+        "color-brand-primary": "#E8175D",  # AMD red
+        "color-brand-content": "#E8175D",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#E8175D",
+        "color-brand-content": "#E8175D",
+    },
+    "sidebar_hide_name": False,
+    "navigation_with_keys": True,
 }
+
+# Project logo (optional - you can add AMD logo later)
+# html_logo = "_static/logo.png"
 
 # Source file suffix
 source_suffix = {
