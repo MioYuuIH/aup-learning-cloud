@@ -847,13 +847,14 @@ function createResourceHTML(resource) {
             // Hide runtime selector in single-node mode
             if (window.SINGLE_NODE_MODE) {
                 const runtimeContainer = document.getElementById('runtimeContainer');
+                const runtimeInput = document.getElementById('runtimeInput');
                 if (runtimeContainer) {
                     runtimeContainer.style.display = 'none';
                 }
-                // Set a large default runtime value for single-node mode
-                const runtimeInput = document.getElementById('runtimeInput');
+                // Set a large default runtime value for single-node mode and disable the input
                 if (runtimeInput) {
                     runtimeInput.value = 99999;
+                    runtimeInput.disabled = true;  // Disable to prevent validation issues
                 }
             }
         } catch (error) {
