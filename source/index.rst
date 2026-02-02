@@ -11,23 +11,29 @@ AUP Learning Cloud is a tailored JupyterHub deployment designed to provide an in
 
 .. toctree::
    :maxdepth: 2
-   :caption: Getting Started
+   :caption: Introduction
 
-   getting-started/index
-   getting-started/quick-start
-   getting-started/installation
+   introduction/overview
 
 .. toctree::
    :maxdepth: 2
-   :caption: User Guide
+   :caption: Installation
 
-   user-guide/index
+   installation/quick-start
+   installation/single-node
+   installation/multi-node
 
 .. toctree::
    :maxdepth: 2
    :caption: JupyterHub Configuration
 
    jupyterhub/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: User Guide
+
+   user-guide/index
 
 .. toctree::
    :maxdepth: 1
