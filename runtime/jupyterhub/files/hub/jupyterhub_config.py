@@ -1641,10 +1641,12 @@ class RemoteLabKubeSpawner(KubeSpawner):
         quota_rate = get_quota_rate(accelerator_type) if QUOTA_ENABLED else 0
 
         # Set environment variables for jupyterlab-server-timer extension
+        # TODO: Find a way to properly disable the timer in single-node mode
+        timer_runtime = runtime_minutes if not SINGLE_NODE_MODE else 4320  # 3 days
         self.environment.update(
             {
                 "JOB_START_TIME": str(start_time),
-                "JOB_RUN_TIME": str(runtime_minutes),
+                "JOB_RUN_TIME": str(timer_runtime),
                 "QUOTA_RATE": str(quota_rate),
             }
         )
