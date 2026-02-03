@@ -28,7 +28,7 @@ SOFTWARE.
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resource Selection</title>
+    <title>AUP Learning Cloud</title>
 
 <style>
     @media (prefers-color-scheme: dark) {
@@ -390,7 +390,7 @@ let userQuotaInfo = {
 let selectedResourceType = null;
 let selectedAcceleratorType = 'cpu';  // Track selected GPU/accelerator type for quota calculation
 
-// Get XSRF token from cookie (required for JupyterHub API calls)
+// Get XSRF token from cookie (required for AUP Learning Cloud API calls)
 function getXsrfToken() {
     const match = document.cookie.match(/(?:^|;\s*)_xsrf=([^;]+)/);
     return match ? decodeURIComponent(match[1]) : '';
