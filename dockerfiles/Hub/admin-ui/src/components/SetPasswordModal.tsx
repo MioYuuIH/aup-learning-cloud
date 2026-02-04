@@ -151,7 +151,7 @@ export function SetPasswordModal({ show, user, onHide }: Props) {
       </Modal.Body>
       <Modal.Footer>
         {success ? (
-          <Button variant="primary" onClick={onHide}>
+          <Button variant="dark" onClick={onHide}>
             Done
           </Button>
         ) : (
@@ -160,7 +160,7 @@ export function SetPasswordModal({ show, user, onHide }: Props) {
               Cancel
             </Button>
             <Button
-              variant="primary"
+              variant="dark"
               onClick={handleSubmit}
               disabled={loading || !password}
             >

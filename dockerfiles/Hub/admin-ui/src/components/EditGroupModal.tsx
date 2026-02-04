@@ -189,7 +189,7 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
                 </option>
               ))}
             </Form.Select>
-            <Button variant="primary" onClick={handleAddUser} disabled={loading || loadingUsers || !newUsername}>
+            <Button variant="dark" onClick={handleAddUser} disabled={loading || loadingUsers || !newUsername}>
               Add user
             </Button>
           </InputGroup>
@@ -239,7 +239,7 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
                 />
               </div>
               <div className="col-2">
-                <Button variant="primary" onClick={handleAddProperty} disabled={loading} className="w-100">
+                <Button variant="dark" onClick={handleAddProperty} disabled={loading} className="w-100">
                   Add Item
                 </Button>
               </div>
@@ -275,7 +275,7 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
           <Button variant="secondary" onClick={onHide} disabled={loading} className="me-2">
             Back
           </Button>
-          <Button variant="primary" onClick={handleApply} disabled={loading}>
+          <Button variant="dark" onClick={handleApply} disabled={loading}>
             {loading ? 'Applying...' : 'Apply'}
           </Button>
         </div>

@@ -230,7 +230,7 @@ export function CreateUserModal({ show, onHide, onSuccess }: Props) {
               Cancel
             </Button>
             <Button
-              variant="primary"
+              variant="dark"
               onClick={handleSubmit}
               disabled={loading}
             >
@@ -246,10 +246,10 @@ export function CreateUserModal({ show, onHide, onSuccess }: Props) {
           </>
         ) : (
           <>
-            <Button variant="outline-primary" onClick={copyToClipboard}>
+            <Button variant="outline-dark" onClick={copyToClipboard}>
               <i className="bi bi-clipboard me-1"></i> Copy to Clipboard
             </Button>
-            <Button variant="primary" onClick={handleClose}>
+            <Button variant="dark" onClick={handleClose}>
               Done
             </Button>
           </>
