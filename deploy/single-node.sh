@@ -144,9 +144,9 @@ function setup_dummy_interface() {
     echo "Setting up dummy network interface for portable operation..."
     sudo ip link add dummy0 type dummy
     sudo ip link set dummy0 up
-    sudo ip addr add ${K3S_NODE_IP}/32 dev dummy0
+    sudo ip addr add "${K3S_NODE_IP}/32" dev dummy0
     # Add a low-priority default route so K3s can detect a valid route
-    sudo ip route add default via ${K3S_NODE_IP} dev dummy0 metric 1000 2>/dev/null || true
+    sudo ip route add default via "${K3S_NODE_IP}" dev dummy0 metric 1000 2>/dev/null || true
 
     # Make persistent across reboots
     cat << EOF | sudo tee /etc/systemd/system/dummy-interface.service > /dev/null

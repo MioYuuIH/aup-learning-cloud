@@ -18,18 +18,18 @@
 # SOFTWARE.
 
 # Build args can be passed via environment variables
-BUILD_ARGS=""
+BUILD_ARGS=()
 if [ -n "${NODE_IMAGE:-}" ]; then
-    BUILD_ARGS="$BUILD_ARGS --build-arg NODE_IMAGE=$NODE_IMAGE"
+    BUILD_ARGS+=("--build-arg" "NODE_IMAGE=$NODE_IMAGE")
 fi
 if [ -n "${HUB_IMAGE:-}" ]; then
-    BUILD_ARGS="$BUILD_ARGS --build-arg HUB_IMAGE=$HUB_IMAGE"
+    BUILD_ARGS+=("--build-arg" "HUB_IMAGE=$HUB_IMAGE")
 fi
 if [ -n "${PIP_INDEX_URL:-}" ]; then
-    BUILD_ARGS="$BUILD_ARGS --build-arg PIP_INDEX_URL=$PIP_INDEX_URL"
+    BUILD_ARGS+=("--build-arg" "PIP_INDEX_URL=$PIP_INDEX_URL")
 fi
 if [ -n "${NPM_REGISTRY:-}" ]; then
-    BUILD_ARGS="$BUILD_ARGS --build-arg NPM_REGISTRY=$NPM_REGISTRY"
+    BUILD_ARGS+=("--build-arg" "NPM_REGISTRY=$NPM_REGISTRY")
 fi
 
-docker build $BUILD_ARGS -t ghcr.io/amdresearch/auplc-hub:latest .
+docker build "${BUILD_ARGS[@]}" -t ghcr.io/amdresearch/auplc-hub:latest .
