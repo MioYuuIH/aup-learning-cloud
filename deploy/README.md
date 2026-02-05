@@ -46,6 +46,8 @@ cd aup-learning-cloud
 
 A simplified deployment for development, demos, or small-scale teaching environments.
 
+> **💡 Tip**: If you need to use alternative container registries or package mirrors, see [Mirror Configuration](#mirror-configuration).
+
 ### Prerequisites
 
 **Hardware**
@@ -444,4 +446,47 @@ which helm
 echo $PATH
 
 # Reinstall helm if needed (see Step 2 in deployment guides above)
+```
+
+---
+
+## Advanced Configuration
+
+### Mirror Configuration
+
+If you need to use alternative mirrors for container registries or package managers, you can configure them via environment variables when running the deployment script.
+
+#### Container Registry Mirror
+
+Set `MIRROR_PREFIX` to use a registry mirror. The prefix will be prepended to all container image references:
+
+```bash
+# Example: quay.io/jupyterhub/k8s-hub:4.1.0 becomes
+#          mirror.example.com/quay.io/jupyterhub/k8s-hub:4.1.0
+
+MIRROR_PREFIX="mirror.example.com" ./single-node.sh install
+```
+
+#### Package Manager Mirrors
+
+Set `MIRROR_PIP` and `MIRROR_NPM` to use alternative package repositories during image builds:
+
+```bash
+MIRROR_PIP="https://pypi.example.com/simple" \
+MIRROR_NPM="https://registry.example.com" \
+./single-node.sh build-images
+```
+
+#### Combined Example
+
+```bash
+MIRROR_PREFIX="mirror.example.com" \
+MIRROR_PIP="https://pypi.example.com/simple" \
+MIRROR_NPM="https://registry.example.com" \
+./single-node.sh install
+```
+
+For available environment variables, run:
+```bash
+./single-node.sh help
 ```
