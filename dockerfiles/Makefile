@@ -26,7 +26,7 @@ ifneq ($(MIRROR_NPM),)
   BUILD_ARGS += --build-arg NPM_REGISTRY=$(MIRROR_NPM)
 endif
 
-.PHONY: all base base-cpu base-gfx1151 hub courses cv dl llm
+.PHONY: all base base-cpu base-gfx1151 hub courses cv dl llm physim
 
 # Build all images
 all: base hub courses
@@ -67,7 +67,7 @@ hub:
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-hub:latest
 
 # --- Course Images ---
-courses: cv dl llm
+courses: cv dl llm physim
 
 cv:
 	@echo "-------------------------------------------"; \
@@ -93,6 +93,14 @@ llm:
 	cd Courses/LLM && bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-llm:latest
 
+physim:
+	@echo "-------------------------------------------"; \
+		echo "Building PhySim Course Image..."; \
+		echo "-------------------------------------------";
+
+	cd Courses/PhySim && bash ./build.sh
+	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-physim:latest
+
 # --- Export Images ---
 save-image:
 	@if [ -n "$(K3S_IMAGES_DIR)" ]; then \
@@ -103,6 +111,7 @@ save-image:
 		echo "-------------------------------------------"; \
 		echo "Export: $(IMAGE)"; \
 		echo "Save to : $$out_path"; \
+		sudo rm -f $$out_path; \
 		sudo docker save "$(IMAGE)" -o "$$out_path" && echo "✅ Success" || (echo "❌ ERROR"; exit 1); \
 		echo "-------------------------------------------"; \
 	else \

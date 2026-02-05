@@ -137,6 +137,7 @@ RESOURCE_IMAGES = {
     "Course-CV": "ghcr.io/amdresearch/auplc-cv:latest",
     "Course-DL": "ghcr.io/amdresearch/auplc-dl:latest",
     "Course-LLM": "ghcr.io/amdresearch/auplc-llm:latest",
+    "Course-PhySim": "ghcr.io/amdresearch/auplc-physim:latest",
 }
 
 # RESOURCE_REQUIREMENTS
@@ -146,6 +147,7 @@ RESOURCE_REQUIREMENTS = {
     "Course-CV": {"cpu": "4", "memory": "16Gi", "memory_limit": "24Gi", "amd.com/gpu": "1"},
     "Course-DL": {"cpu": "4", "memory": "16Gi", "memory_limit": "24Gi", "amd.com/gpu": "1"},
     "Course-LLM": {"cpu": "4", "memory": "16Gi", "memory_limit": "24Gi", "amd.com/gpu": "1"},
+    "Course-PhySim": {"cpu": "4", "memory": "16Gi", "memory_limit": "24Gi", "amd.com/gpu": "1"},
     "none": {"cpu": "2", "memory": "4Gi", "memory_limit": "6Gi"},
 }
 
@@ -216,9 +218,9 @@ NPU_SECURITY_CONFIG = {
 # the resource_name should be the same as the key in RESOURCE_IMAGES
 TEAM_RESOURCE_MAPPING = {
     "cpu": ["cpu"],
-    "gpu": ["Course-CV", "Course-DL", "Course-LLM"],
-    "official": ["cpu", "Course-CV", "Course-DL", "Course-LLM"],
-    "AUP": ["Course-CV", "Course-DL", "Course-LLM"],
+    "gpu": ["Course-CV", "Course-DL", "Course-LLM", "Course-PhySim"],
+    "official": ["cpu", "Course-CV", "Course-DL", "Course-LLM", "Course-PhySim"],
+    "AUP": ["Course-CV", "Course-DL", "Course-LLM", "Course-PhySim"],
     "native-users": ["Course-CV", "Course-DL", "Course-LLM"],
 }
 

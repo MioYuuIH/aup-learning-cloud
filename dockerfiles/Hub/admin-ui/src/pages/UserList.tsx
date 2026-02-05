@@ -384,18 +384,18 @@ export function UserList() {
       {/* Top Controls */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="d-flex gap-2">
-          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+          <Button variant="dark" onClick={() => setShowCreateModal(true)}>
             Add Users
           </Button>
           <Button
-            variant="primary"
+            variant="dark"
             onClick={handleStartAll}
             disabled={actionLoading === 'start-all'}
           >
             {actionLoading === 'start-all' ? <Spinner animation="border" size="sm" /> : 'Start All'}
           </Button>
           <Button
-            variant="warning"
+            variant="secondary"
             onClick={handleStopAll}
             disabled={actionLoading === 'stop-all'}
           >
@@ -403,7 +403,7 @@ export function UserList() {
           </Button>
           {quotaEnabled && (
             <Button
-              variant="info"
+              variant="secondary"
               onClick={() => setShowBatchQuotaModal(true)}
               disabled={selectedUsers.size === 0}
               title={selectedUsers.size === 0 ? 'Select users first' : `Set quota for ${selectedUsers.size} users`}
@@ -592,7 +592,7 @@ export function UserList() {
                 <ButtonGroup size="sm">
                   {user.server ? (
                     <Button
-                      variant="primary"
+                      variant="dark"
                       onClick={() => handleStopServer(user)}
                       disabled={actionLoading === `stop-${user.name}`}
                       title="Stop Server"
@@ -605,7 +605,7 @@ export function UserList() {
                     </Button>
                   ) : (
                     <Button
-                      variant="primary"
+                      variant="dark"
                       onClick={() => handleStartServer(user)}
                       disabled={actionLoading === `start-${user.name}` || !!user.pending}
                       title="Start Server"
@@ -824,7 +824,7 @@ export function UserList() {
             Cancel
           </Button>
           <Button
-            variant="primary"
+            variant="dark"
             onClick={handleBatchQuotaSave}
             disabled={actionLoading === 'batch-quota'}
           >

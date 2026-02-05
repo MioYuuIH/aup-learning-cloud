@@ -116,7 +116,7 @@ export function GroupList() {
       {/* Top Controls */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="d-flex gap-2">
-          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+          <Button variant="dark" onClick={() => setShowCreateModal(true)}>
             Create Group
           </Button>
         </div>
@@ -182,7 +182,7 @@ export function GroupList() {
               </td>
               <td>
                 <Button
-                  variant="primary"
+                  variant="dark"
                   size="sm"
                   onClick={() => handleEditGroup(group)}
                   className="me-2"
@@ -227,7 +227,7 @@ export function GroupList() {
           <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={createLoading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleCreateGroup} disabled={createLoading}>
+          <Button variant="dark" onClick={handleCreateGroup} disabled={createLoading}>
             {createLoading ? 'Creating...' : 'Create Group'}
           </Button>
         </Modal.Footer>
