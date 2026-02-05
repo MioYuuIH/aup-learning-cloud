@@ -133,7 +133,10 @@ function install_k3s_single_node() {
     # Configure registry mirrors before starting k3s
     configure_registry_mirrors
 
-    curl -sfL https://get.k3s.io | sudo K3S_KUBECONFIG_MODE="644" sh -
+    # Use localhost binding for offline single-node deployment
+    # This ensures K3s works even when external network is disconnected
+    curl -sfL https://get.k3s.io | sudo K3S_KUBECONFIG_MODE="644" \
+        INSTALL_K3S_EXEC="--bind-address=127.0.0.1 --advertise-address=127.0.0.1" sh -
 
     echo "Configuring kubeconfig for user: $(whoami)"
     mkdir -p "$HOME/.kube"
