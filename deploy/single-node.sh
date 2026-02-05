@@ -253,10 +253,26 @@ function pull_external_images() {
     local failed_images=()
 
     for image in "${EXTERNAL_IMAGES[@]}"; do
+        # Determine the full image path for pulling with mirror
+        # Images without registry prefix are from docker.io
+        local full_image="${image}"
+        local first_segment="${image%%/*}"
+
+        if [[ "${image}" == *"/"* ]]; then
+            # Has slash - check if first segment looks like a registry (contains a dot)
+            if [[ "${first_segment}" != *"."* ]]; then
+                # No dot in first segment, it's docker.io (e.g., curlimages/curl)
+                full_image="docker.io/${image}"
+            fi
+        else
+            # No slash - it's an official docker image (e.g., traefik:v3.3.1)
+            full_image="docker.io/library/${image}"
+        fi
+
         # Apply mirror prefix if set
-        local pull_image="${image}"
+        local pull_image="${full_image}"
         if [[ -n "${MIRROR_PREFIX}" ]]; then
-            pull_image="${MIRROR_PREFIX}/${image}"
+            pull_image="${MIRROR_PREFIX}/${full_image}"
         fi
 
         echo "-------------------------------------------"
@@ -264,7 +280,7 @@ function pull_external_images() {
 
         if docker pull "${pull_image}"; then
             # Tag back to original name so K3s can use it
-            if [[ -n "${MIRROR_PREFIX}" ]]; then
+            if [[ "${pull_image}" != "${image}" ]]; then
                 docker tag "${pull_image}" "${image}"
             fi
 
