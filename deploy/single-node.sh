@@ -24,6 +24,14 @@ set -euo pipefail
 
 # k3s image dir
 K3S_IMAGES_DIR="/var/lib/rancher/k3s/agent/images"
+K3S_REGISTRIES_FILE="/etc/rancher/k3s/registries.yaml"
+
+# Registry mirrors (set via environment variables)
+# Example: MIRROR_DOCKER="https://mirror.example.com" ./single-node.sh install
+MIRROR_DOCKER="${MIRROR_DOCKER:-}"
+MIRROR_QUAY="${MIRROR_QUAY:-}"
+MIRROR_K8S="${MIRROR_K8S:-}"
+MIRROR_GHCR="${MIRROR_GHCR:-}"
 
 # Custom images (built locally)
 CUSTOM_IMAGES=(
@@ -82,8 +90,47 @@ function install_tools() {
     fi
 }
 
+function configure_registry_mirrors() {
+    # Configure K3s registry mirrors if any MIRROR_* variables are set
+    # This must be done BEFORE k3s starts
+
+    if [[ -z "${MIRROR_DOCKER}" && -z "${MIRROR_QUAY}" && -z "${MIRROR_K8S}" && -z "${MIRROR_GHCR}" ]]; then
+        echo "No registry mirrors configured. Using default registries."
+        return 0
+    fi
+
+    echo "Configuring registry mirrors..."
+    sudo mkdir -p "$(dirname "${K3S_REGISTRIES_FILE}")"
+
+    local config="mirrors:"
+
+    # Note: MIRROR_* should be registry address without https:// prefix
+    # e.g., MIRROR_QUAY=quay.m.daocloud.io (not https://quay.m.daocloud.io)
+    if [[ -n "${MIRROR_DOCKER}" ]]; then
+        config+=$'\n'"  docker.io:"$'\n'"    endpoint:"$'\n'"      - \"https://${MIRROR_DOCKER}\""
+    fi
+
+    if [[ -n "${MIRROR_QUAY}" ]]; then
+        config+=$'\n'"  quay.io:"$'\n'"    endpoint:"$'\n'"      - \"https://${MIRROR_QUAY}\""
+    fi
+
+    if [[ -n "${MIRROR_K8S}" ]]; then
+        config+=$'\n'"  registry.k8s.io:"$'\n'"    endpoint:"$'\n'"      - \"https://${MIRROR_K8S}\""
+    fi
+
+    if [[ -n "${MIRROR_GHCR}" ]]; then
+        config+=$'\n'"  ghcr.io:"$'\n'"    endpoint:"$'\n'"      - \"https://${MIRROR_GHCR}\""
+    fi
+
+    echo "${config}" | sudo tee "${K3S_REGISTRIES_FILE}" > /dev/null
+    echo "Registry mirrors configured at ${K3S_REGISTRIES_FILE}"
+}
+
 function install_k3s_single_node() {
     echo "Starting K3s installation..."
+
+    # Configure registry mirrors before starting k3s
+    configure_registry_mirrors
 
     curl -sfL https://get.k3s.io | sudo K3S_KUBECONFIG_MODE="644" sh -
 
@@ -175,8 +222,12 @@ function local_image_build() {
 
     echo "Build & Copy Images to K3S image pool"
 
-    # Pass IMAGES array as space-separated string to Makefile
-    cd ../dockerfiles/ && make K3S_IMAGES_DIR="${K3S_IMAGES_DIR}" IMAGES="${IMAGES[*]}"
+    # Pass IMAGES array and mirror settings to Makefile
+    cd ../dockerfiles/ && make \
+        K3S_IMAGES_DIR="${K3S_IMAGES_DIR}" \
+        IMAGES="${IMAGES[*]}" \
+        MIRROR_DOCKER="${MIRROR_DOCKER}" \
+        MIRROR_QUAY="${MIRROR_QUAY}"
 
     echo "-------------------------------------------"
 }
@@ -250,8 +301,39 @@ function remove_all_components() {
     remove_k3s
 }
 
+function show_help() {
+    cat << 'EOF'
+Usage: ./single-node.sh <command>
+
+Commands:
+  install          Full installation (k3s + images + runtime)
+  uninstall        Remove everything
+  install-tools    Install helm and k9s
+  install-runtime  Deploy JupyterHub runtime only
+  remove-runtime   Remove JupyterHub runtime
+  upgrade-runtime  Upgrade JupyterHub runtime
+  build-images     Build custom images locally
+  pull-images      Pull external images for offline use
+
+Registry Mirror Configuration:
+  Set environment variables to use alternative registry mirrors.
+  Use registry address without https:// prefix.
+
+    MIRROR_DOCKER   Mirror for docker.io (traefik, curl, ubuntu, node)
+    MIRROR_QUAY     Mirror for quay.io (jupyterhub components)
+    MIRROR_K8S      Mirror for registry.k8s.io (kube-scheduler, pause)
+    MIRROR_GHCR     Mirror for ghcr.io (project images)
+
+  Example:
+    MIRROR_QUAY="quay.mirrors.example.com" \
+    MIRROR_K8S="k8s.mirrors.example.com" \
+    ./single-node.sh install
+
+EOF
+}
+
 if [[ $# -eq 0 ]]; then
-    echo "Usage: $0 {install|uninstall|install-tools|install-runtime|remove-runtime|upgrade-runtime|build-images|pull-images}"
+    show_help
     exit 1
 fi
 
@@ -264,5 +346,6 @@ case "$1" in
     upgrade-runtime) upgrade_aup_learning_cloud_runtime ;;
     build-images) local_image_build ;;
     pull-images) pull_external_images ;;
-    *) echo "Usage: $0 {install|uninstall|install-tools|install-runtime|remove-runtime|upgrade-runtime|build-images|pull-images}"; exit 1 ;;
+    help|--help|-h) show_help ;;
+    *) show_help; exit 1 ;;
 esac

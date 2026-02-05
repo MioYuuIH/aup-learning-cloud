@@ -4,6 +4,24 @@ SHELL := /bin/bash
 
 K3S_IMAGES_DIR ?= /var/lib/rancher/k3s/agent/images
 
+# Registry mirror configuration (optional)
+# Set these to use alternative registry mirrors for base images
+# Use registry address without https:// prefix
+# Example: make hub MIRROR_DOCKER=docker.mirrors.example.com MIRROR_QUAY=quay.mirrors.example.com
+MIRROR_DOCKER ?=
+MIRROR_QUAY ?=
+
+# Build args for docker build (constructed from mirror settings)
+BUILD_ARGS :=
+ifneq ($(MIRROR_DOCKER),)
+  BUILD_ARGS += --build-arg NODE_IMAGE=$(MIRROR_DOCKER)/node:20-alpine
+  BUILD_ARGS += --build-arg BASE_IMAGE=$(MIRROR_DOCKER)/ubuntu:24.04
+endif
+ifneq ($(MIRROR_QUAY),)
+  BUILD_ARGS += --build-arg HUB_IMAGE=$(MIRROR_QUAY)/jupyterhub/k8s-hub:4.1.0
+  BUILD_ARGS += --build-arg BASE_IMAGE=$(MIRROR_QUAY)/jupyter/base-notebook
+endif
+
 .PHONY: all base base-cpu base-gfx1151 hub courses cv dl llm
 
 # Build all images
@@ -17,7 +35,7 @@ base-cpu:
 	 	echo "Building Base Image (cpu)..."; \
 		echo "-------------------------------------------";
 
-	cd Base && docker build -t ghcr.io/amdresearch/auplc-default:latest --file Dockerfile.cpu .
+	cd Base && docker build $(BUILD_ARGS) -t ghcr.io/amdresearch/auplc-default:latest --file Dockerfile.cpu .
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-default:latest
 
 base-gfx1151:
@@ -25,7 +43,7 @@ base-gfx1151:
 	 	echo "Building Base Image (gfx1151)..."; \
 		echo "-------------------------------------------";
 
-	cd Base && docker build -t ghcr.io/amdresearch/base-gfx1151:v0.1-full --file Dockerfile.gfx1151 .
+	cd Base && docker build $(BUILD_ARGS) -t ghcr.io/amdresearch/base-gfx1151:v0.1-full --file Dockerfile.gfx1151 .
 
 # --- Hub Image ---
 hub:
@@ -33,7 +51,9 @@ hub:
 	 	echo "Building Hub Image..."; \
 		echo "-------------------------------------------";
 
-	cd Hub && bash ./build.sh
+	cd Hub && NODE_IMAGE="$(if $(MIRROR_DOCKER),$(MIRROR_DOCKER)/node:20-alpine,)" \
+		HUB_IMAGE="$(if $(MIRROR_QUAY),$(MIRROR_QUAY)/jupyterhub/k8s-hub:4.1.0,)" \
+		bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-hub:latest
 
 # --- Course Images ---

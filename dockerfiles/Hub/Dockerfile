@@ -18,7 +18,8 @@
 # SOFTWARE.
 
 # ========== Stage 1: Build Admin UI ==========
-FROM node:20-alpine AS admin-ui-builder
+ARG NODE_IMAGE=node:20-alpine
+FROM ${NODE_IMAGE} AS admin-ui-builder
 
 WORKDIR /app
 
@@ -38,7 +39,8 @@ COPY admin-ui/ ./
 RUN pnpm run build
 
 # ========== Stage 2: Final Hub Image ==========
-FROM quay.io/jupyterhub/k8s-hub:4.1.0
+ARG HUB_IMAGE=quay.io/jupyterhub/k8s-hub:4.1.0
+FROM ${HUB_IMAGE}
 
 # Switch to root for setup
 USER root
