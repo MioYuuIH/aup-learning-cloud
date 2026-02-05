@@ -452,17 +452,21 @@ echo $PATH
 
 ## Advanced Configuration
 
-### Offline Operation
+### Offline / Portable Operation
 
-The single-node deployment script automatically configures the system for offline operation. When you run `./single-node.sh install`, it:
+The single-node deployment script automatically configures the system for offline and portable operation. When you run `./single-node.sh install`, it:
 
-1. **Creates a dummy network interface** (`dummy0`) with a low-priority default route
-2. **Pre-pulls all required container images** to local storage
-3. **Configures K3s to use local images** from `/var/lib/rancher/k3s/agent/images/`
+1. **Creates a dummy network interface** (`dummy0`) with a stable IP address (`10.255.255.1`)
+2. **Binds K3s to the dummy interface** using `--node-ip` and `--flannel-iface`
+3. **Pre-pulls all required container images** to local storage
+4. **Configures K3s to use local images** from `/var/lib/rancher/k3s/agent/images/`
 
-This ensures the cluster remains fully functional even when the external network is disconnected (e.g., network cable unplugged, WiFi unavailable).
+This ensures the cluster remains fully functional even when:
+- External network is disconnected (network cable unplugged)
+- WiFi network changes (connecting to different access points)
+- No network is available at all
 
-**How it works**: K3s requires a default route to detect the node IP. The dummy interface provides a fallback route (`metric 1000`) that only takes effect when no other network is available. This doesn't affect normal network operation.
+**How it works**: K3s is bound to a stable dummy interface IP instead of the physical network interface. This means K3s doesn't care about external network changes - it always uses the same internal IP for cluster communication.
 
 **Reference**: [K3s Air-Gap Installation](https://docs.k3s.io/installation/airgap)
 
