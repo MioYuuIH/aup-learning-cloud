@@ -458,7 +458,7 @@ If you need to use alternative mirrors for container registries or package manag
 
 #### Container Registry Mirror
 
-Set `MIRROR_PREFIX` to use a registry mirror. The prefix will be prepended to all container image references:
+Set `MIRROR_PREFIX` to use a registry mirror that supports the **universal prefix mode**. The prefix will be prepended to all container image references:
 
 ```bash
 # Example: quay.io/jupyterhub/k8s-hub:4.1.0 becomes
@@ -466,6 +466,8 @@ Set `MIRROR_PREFIX` to use a registry mirror. The prefix will be prepended to al
 
 MIRROR_PREFIX="mirror.example.com" ./single-node.sh install
 ```
+
+> **Note**: This configuration works with registry mirrors that support the universal prefix pattern (e.g., `mirror/registry.k8s.io/image`). Some mirror services use per-registry subdomains instead (e.g., `k8s.mirror.org/image`), which require manual K3s registry configuration. See [K3s Private Registry Configuration](https://docs.k3s.io/installation/private-registry) for details.
 
 #### Package Manager Mirrors
 
