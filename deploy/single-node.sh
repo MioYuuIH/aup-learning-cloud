@@ -60,6 +60,10 @@ EXTERNAL_IMAGES=(
     "traefik:v3.3.1"
     # Utility images
     "curlimages/curl:8.5.0"
+    # Base images for Docker build
+    "node:20-alpine"
+    "ubuntu:24.04"
+    "quay.io/jupyter/base-notebook"
 )
 
 # Combined list for backward compatibility
@@ -279,9 +283,14 @@ function pull_external_images() {
         echo "Pulling: ${pull_image}"
 
         if docker pull "${pull_image}"; then
-            # Tag back to original name so K3s can use it
+            # Tag to original name so K3s can use it
             if [[ "${pull_image}" != "${image}" ]]; then
                 docker tag "${pull_image}" "${image}"
+            fi
+
+            # Also tag to mirror-prefixed name so Docker build with MIRROR_PREFIX can use local cache
+            if [[ -n "${MIRROR_PREFIX}" && "${pull_image}" != "${MIRROR_PREFIX}/${full_image}" ]]; then
+                docker tag "${pull_image}" "${MIRROR_PREFIX}/${full_image}"
             fi
 
             # Generate filename from original image name (replace / and : with -)
