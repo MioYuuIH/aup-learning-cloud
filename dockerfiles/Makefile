@@ -18,7 +18,6 @@ BUILD_ARGS :=
 ifneq ($(MIRROR_PREFIX),)
   BUILD_ARGS += --build-arg NODE_IMAGE=$(MIRROR_PREFIX)/docker.io/library/node:20-alpine
   BUILD_ARGS += --build-arg HUB_IMAGE=$(MIRROR_PREFIX)/quay.io/jupyterhub/k8s-hub:4.1.0
-  BUILD_ARGS += --build-arg BASE_IMAGE=$(MIRROR_PREFIX)/docker.io/library/ubuntu:24.04
 endif
 ifneq ($(MIRROR_PIP),)
   BUILD_ARGS += --build-arg PIP_INDEX_URL=$(MIRROR_PIP)
@@ -40,7 +39,9 @@ base-cpu:
 	 	echo "Building Base Image (cpu)..."; \
 		echo "-------------------------------------------";
 
-	cd Base && docker build $(BUILD_ARGS) -t ghcr.io/amdresearch/auplc-default:latest --file Dockerfile.cpu .
+	cd Base && docker build $(BUILD_ARGS) \
+		$(if $(MIRROR_PREFIX),--build-arg BASE_IMAGE=$(MIRROR_PREFIX)/quay.io/jupyter/base-notebook,) \
+		-t ghcr.io/amdresearch/auplc-default:latest --file Dockerfile.cpu .
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-default:latest
 
 base-gfx1151:
@@ -48,7 +49,9 @@ base-gfx1151:
 	 	echo "Building Base Image (gfx1151)..."; \
 		echo "-------------------------------------------";
 
-	cd Base && docker build $(BUILD_ARGS) -t ghcr.io/amdresearch/base-gfx1151:v0.1-full --file Dockerfile.gfx1151 .
+	cd Base && docker build $(BUILD_ARGS) \
+		$(if $(MIRROR_PREFIX),--build-arg BASE_IMAGE=$(MIRROR_PREFIX)/docker.io/library/ubuntu:24.04,) \
+		-t ghcr.io/amdresearch/base-gfx1151:v0.1-full --file Dockerfile.gfx1151 .
 
 # --- Hub Image ---
 hub:
