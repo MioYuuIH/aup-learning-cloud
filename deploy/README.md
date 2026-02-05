@@ -46,6 +46,8 @@ cd aup-learning-cloud
 
 A simplified deployment for development, demos, or small-scale teaching environments.
 
+> **💡 Tip**: If you need to use alternative container registries or package mirrors, see [Mirror Configuration](#mirror-configuration).
+
 ### Prerequisites
 
 **Hardware**
@@ -444,4 +446,67 @@ which helm
 echo $PATH
 
 # Reinstall helm if needed (see Step 2 in deployment guides above)
+```
+
+---
+
+## Advanced Configuration
+
+### Offline / Portable Operation
+
+The single-node deployment script automatically configures the system for offline and portable operation. When you run `./single-node.sh install`, it:
+
+1. **Creates a dummy network interface** (`dummy0`) with a stable IP address (`10.255.255.1`)
+2. **Binds K3s to the dummy interface** using `--node-ip` and `--flannel-iface`
+3. **Pre-pulls all required container images** to local storage
+4. **Configures K3s to use local images** from `/var/lib/rancher/k3s/agent/images/`
+
+This ensures the cluster remains fully functional even when:
+- External network is disconnected (network cable unplugged)
+- WiFi network changes (connecting to different access points)
+- No network is available at all
+
+**How it works**: K3s is bound to a stable dummy interface IP instead of the physical network interface. This means K3s doesn't care about external network changes - it always uses the same internal IP for cluster communication.
+
+**Reference**: [K3s Air-Gap Installation](https://docs.k3s.io/installation/airgap)
+
+### Mirror Configuration
+
+If you need to use alternative mirrors for container registries or package managers, you can configure them via environment variables when running the deployment script.
+
+#### Container Registry Mirror
+
+Set `MIRROR_PREFIX` to use a registry mirror that supports the **universal prefix mode**. The prefix will be prepended to all container image references:
+
+```bash
+# Example: quay.io/jupyterhub/k8s-hub:4.1.0 becomes
+#          mirror.example.com/quay.io/jupyterhub/k8s-hub:4.1.0
+
+MIRROR_PREFIX="mirror.example.com" ./single-node.sh install
+```
+
+> **Note**: This configuration works with registry mirrors that support the universal prefix pattern (e.g., `mirror/registry.k8s.io/image`). Some mirror services use per-registry subdomains instead (e.g., `k8s.mirror.org/image`), which require manual K3s registry configuration. See [K3s Private Registry Configuration](https://docs.k3s.io/installation/private-registry) for details.
+
+#### Package Manager Mirrors
+
+Set `MIRROR_PIP` and `MIRROR_NPM` to use alternative package repositories during image builds:
+
+```bash
+MIRROR_PIP="https://pypi.example.com/simple" \
+MIRROR_NPM="https://registry.example.com" \
+./single-node.sh build-images
+```
+
+#### Combined Example
+
+```bash
+MIRROR_PREFIX="mirror.example.com" \
+MIRROR_PIP="https://pypi.example.com/simple" \
+MIRROR_NPM="https://registry.example.com" \
+./single-node.sh install
+```
+
+For available environment variables, run:
+```bash
+./single-node.sh help
 ```

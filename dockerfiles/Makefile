@@ -4,7 +4,29 @@ SHELL := /bin/bash
 
 K3S_IMAGES_DIR ?= /var/lib/rancher/k3s/agent/images
 
-.PHONY: all base base-cpu base-gfx1151 hub courses cv dl llm
+# Mirror configuration (optional)
+# MIRROR_PREFIX: Registry mirror prefix (e.g., mirror.example.com)
+#   Transforms: quay.io/image -> mirror.example.com/quay.io/image
+# MIRROR_PIP: PyPI mirror URL
+# MIRROR_NPM: npm registry URL
+MIRROR_PREFIX ?=
+MIRROR_PIP ?=
+MIRROR_NPM ?=
+
+# Build args for docker build (constructed from mirror settings)
+BUILD_ARGS :=
+ifneq ($(MIRROR_PREFIX),)
+  BUILD_ARGS += --build-arg NODE_IMAGE=$(MIRROR_PREFIX)/docker.io/library/node:20-alpine
+  BUILD_ARGS += --build-arg HUB_IMAGE=$(MIRROR_PREFIX)/quay.io/jupyterhub/k8s-hub:4.1.0
+endif
+ifneq ($(MIRROR_PIP),)
+  BUILD_ARGS += --build-arg PIP_INDEX_URL=$(MIRROR_PIP)
+endif
+ifneq ($(MIRROR_NPM),)
+  BUILD_ARGS += --build-arg NPM_REGISTRY=$(MIRROR_NPM)
+endif
+
+.PHONY: all base base-cpu base-gfx1151 hub courses cv dl llm physim
 
 # Build all images
 all: base hub courses
@@ -17,7 +39,9 @@ base-cpu:
 	 	echo "Building Base Image (cpu)..."; \
 		echo "-------------------------------------------";
 
-	cd Base && docker build -t ghcr.io/amdresearch/auplc-default:latest --file Dockerfile.cpu .
+	cd Base && docker build $(BUILD_ARGS) \
+		$(if $(MIRROR_PREFIX),--build-arg BASE_IMAGE=$(MIRROR_PREFIX)/quay.io/jupyter/base-notebook,) \
+		-t ghcr.io/amdresearch/auplc-default:latest --file Dockerfile.cpu .
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-default:latest
 
 base-gfx1151:
@@ -25,7 +49,9 @@ base-gfx1151:
 	 	echo "Building Base Image (gfx1151)..."; \
 		echo "-------------------------------------------";
 
-	cd Base && docker build -t ghcr.io/amdresearch/base-gfx1151:v0.1-full --file Dockerfile.gfx1151 .
+	cd Base && docker build $(BUILD_ARGS) \
+		$(if $(MIRROR_PREFIX),--build-arg BASE_IMAGE=$(MIRROR_PREFIX)/docker.io/library/ubuntu:24.04,) \
+		-t ghcr.io/amdresearch/base-gfx1151:v0.1-full --file Dockerfile.gfx1151 .
 
 # --- Hub Image ---
 hub:
@@ -33,11 +59,15 @@ hub:
 	 	echo "Building Hub Image..."; \
 		echo "-------------------------------------------";
 
-	cd Hub && bash ./build.sh
+	cd Hub && NODE_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/docker.io/library/node:20-alpine,)" \
+		HUB_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/quay.io/jupyterhub/k8s-hub:4.1.0,)" \
+		PIP_INDEX_URL="$(MIRROR_PIP)" \
+		NPM_REGISTRY="$(MIRROR_NPM)" \
+		bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-hub:latest
 
 # --- Course Images ---
-courses: cv dl llm
+courses: cv dl llm physim
 
 cv:
 	@echo "-------------------------------------------"; \
@@ -63,6 +93,14 @@ llm:
 	cd Courses/LLM && bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-llm:latest
 
+physim:
+	@echo "-------------------------------------------"; \
+		echo "Building PhySim Course Image..."; \
+		echo "-------------------------------------------";
+
+	cd Courses/PhySim && bash ./build.sh
+	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-physim:latest
+
 # --- Export Images ---
 save-image:
 	@if [ -n "$(K3S_IMAGES_DIR)" ]; then \
@@ -73,6 +111,7 @@ save-image:
 		echo "-------------------------------------------"; \
 		echo "Export: $(IMAGE)"; \
 		echo "Save to : $$out_path"; \
+		sudo rm -f $$out_path; \
 		sudo docker save "$(IMAGE)" -o "$$out_path" && echo "✅ Success" || (echo "❌ ERROR"; exit 1); \
 		echo "-------------------------------------------"; \
 	else \

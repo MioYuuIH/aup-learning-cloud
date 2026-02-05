@@ -285,7 +285,7 @@ export function EditUserModal({ show, user, onHide, onUpdate }: Props) {
             <Button variant="secondary" onClick={handleCancelEdit} disabled={loading}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleSaveChanges} disabled={loading}>
+            <Button variant="dark" onClick={handleSaveChanges} disabled={loading}>
               {loading ? 'Saving...' : 'Save Changes'}
             </Button>
           </>
@@ -294,7 +294,7 @@ export function EditUserModal({ show, user, onHide, onUpdate }: Props) {
             <Button variant="secondary" onClick={onHide}>
               Close
             </Button>
-            <Button variant="primary" onClick={handleStartEdit}>
+            <Button variant="dark" onClick={handleStartEdit}>
               <i className="bi bi-pencil me-1"></i> Edit User
             </Button>
           </>

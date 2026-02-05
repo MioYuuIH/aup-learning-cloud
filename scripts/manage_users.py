@@ -644,6 +644,226 @@ def cmd_set_passwords(args, manager: JupyterHubUserManager):
         print("   ⚠️  Keep this file secure and delete after distributing passwords!")
 
 
+# ============ Quota Management Commands ============
+
+
+def set_quota_in_pod(username: str, amount: int, namespace: str = "jupyterhub") -> bool:
+    """Set quota for a user via kubectl exec."""
+    username = username.strip().lower()
+
+    python_code = f'''
+import sys
+sys.path.insert(0, "/etc/jupyterhub")
+from quota_manager import get_quota_manager
+
+qm = get_quota_manager()
+qm.set_balance("{username}", {amount}, "cli_admin")
+print("OK")
+'''
+
+    try:
+        result = subprocess.run(
+            ["kubectl", "--namespace", namespace, "exec", "deployment/hub", "--", "python3", "-c", python_code],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0 and "OK" in result.stdout
+    except Exception as e:
+        print(f"  Error: {e}")
+        return False
+
+
+def add_quota_in_pod(username: str, amount: int, namespace: str = "jupyterhub") -> bool:
+    """Add quota to a user via kubectl exec."""
+    username = username.strip().lower()
+
+    python_code = f'''
+import sys
+sys.path.insert(0, "/etc/jupyterhub")
+from quota_manager import get_quota_manager
+
+qm = get_quota_manager()
+qm.add_quota("{username}", {amount}, "cli_admin")
+print("OK")
+'''
+
+    try:
+        result = subprocess.run(
+            ["kubectl", "--namespace", namespace, "exec", "deployment/hub", "--", "python3", "-c", python_code],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0 and "OK" in result.stdout
+    except Exception as e:
+        print(f"  Error: {e}")
+        return False
+
+
+def get_quota_from_pod(username: str, namespace: str = "jupyterhub") -> int | None:
+    """Get quota balance for a user via kubectl exec."""
+    username = username.strip().lower()
+
+    python_code = f'''
+import sys
+sys.path.insert(0, "/etc/jupyterhub")
+from quota_manager import get_quota_manager
+
+qm = get_quota_manager()
+balance = qm.get_balance("{username}")
+print(f"BALANCE:{{balance}}")
+'''
+
+    try:
+        result = subprocess.run(
+            ["kubectl", "--namespace", namespace, "exec", "deployment/hub", "--", "python3", "-c", python_code],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split("\n"):
+                if line.startswith("BALANCE:"):
+                    return int(line.split(":")[1])
+        return None
+    except Exception:
+        return None
+
+
+def list_quota_from_pod(namespace: str = "jupyterhub") -> list[dict] | None:
+    """Get all user quota balances via kubectl exec."""
+    python_code = """
+import sys
+import json
+sys.path.insert(0, "/etc/jupyterhub")
+from quota_manager import get_quota_manager
+
+qm = get_quota_manager()
+balances = qm.get_all_balances()
+print("JSON:" + json.dumps(balances))
+"""
+
+    try:
+        result = subprocess.run(
+            ["kubectl", "--namespace", namespace, "exec", "deployment/hub", "--", "python3", "-c", python_code],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            import json
+
+            for line in result.stdout.split("\n"):
+                if line.startswith("JSON:"):
+                    return json.loads(line[5:])
+        return None
+    except Exception:
+        return None
+
+
+def cmd_set_quota(args, manager: JupyterHubUserManager):
+    """Set quota for users"""
+    namespace = args.namespace
+
+    if args.file:
+        users = load_users_from_file(args.file)
+        print(f"📄 Loaded {len(users)} users from {args.file}")
+    else:
+        users = [{"username": u} for u in args.users]
+
+    results = {"success": 0, "failed": 0}
+    output_data = []
+
+    for user in users:
+        username = user.get("username", "").strip()
+        if not username:
+            continue
+
+        amount = user.get("quota", args.amount)
+        if amount is None:
+            print(f"  ⚠️  Skipping {username}: no quota amount specified")
+            continue
+
+        success = set_quota_in_pod(username, int(amount), namespace)
+
+        if success:
+            print(f"  ✅ Set {amount} quota for: {username}")
+            results["success"] += 1
+            output_data.append({"username": username, "quota": amount})
+        else:
+            print(f"  ❌ Failed: {username}")
+            results["failed"] += 1
+
+    print("\n" + "=" * 50)
+    print("📊 Results:")
+    print(f"  ✅ Success: {results['success']}")
+    print(f"  ❌ Failed: {results['failed']}")
+    print("=" * 50)
+
+
+def cmd_add_quota(args, manager: JupyterHubUserManager):
+    """Add quota to users"""
+    namespace = args.namespace
+    amount = args.amount
+
+    if args.file:
+        users = load_users_from_file(args.file)
+        usernames = [u["username"] for u in users if u.get("username")]
+    else:
+        usernames = args.users
+
+    print(f"\n🔄 Adding {amount} quota to {len(usernames)} users...")
+
+    results = {"success": 0, "failed": 0}
+
+    for username in usernames:
+        username = username.strip()
+        if not username:
+            continue
+
+        success = add_quota_in_pod(username, amount, namespace)
+        if success:
+            print(f"  ✅ Added {amount} quota to: {username}")
+            results["success"] += 1
+        else:
+            print(f"  ❌ Failed: {username}")
+            results["failed"] += 1
+
+    print("\n" + "=" * 50)
+    print("📊 Results:")
+    print(f"  ✅ Success: {results['success']}")
+    print(f"  ❌ Failed: {results['failed']}")
+    print("=" * 50)
+
+
+def cmd_list_quota(args, manager: JupyterHubUserManager):
+    """List all user quota balances"""
+    namespace = args.namespace
+
+    balances = list_quota_from_pod(namespace)
+
+    if balances is None:
+        print("❌ Failed to retrieve quota balances")
+        return
+
+    if not balances:
+        print("No quota records found")
+        return
+
+    print(f"\n📋 Quota Balances ({len(balances)} users):\n")
+    print(f"{'Username':<25} {'Balance':<15} {'Last Updated':<25}")
+    print("-" * 65)
+
+    for b in balances:
+        username = b.get("username", "")
+        balance = b.get("balance", 0)
+        updated = b.get("updated_at", "N/A")
+        if updated and updated != "N/A":
+            updated = updated[:19].replace("T", " ")
+        print(f"{username:<25} {balance:<15} {updated:<25}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="JupyterHub User Management Tool",
@@ -743,6 +963,30 @@ Environment Variables:
         "--namespace", "-n", default="jupyterhub", help="Kubernetes namespace (default: jupyterhub)"
     )
 
+    # Set-quota command
+    setquota_parser = subparsers.add_parser("set-quota", help="Set quota for users (requires kubectl)")
+    setquota_parser.add_argument("users", nargs="*", help="Username(s) to set quota for")
+    setquota_parser.add_argument("--file", "-f", help="CSV or Excel file with username,quota columns")
+    setquota_parser.add_argument("--amount", "-a", type=int, help="Quota amount (when using usernames)")
+    setquota_parser.add_argument(
+        "--namespace", "-n", default="jupyterhub", help="Kubernetes namespace (default: jupyterhub)"
+    )
+
+    # Add-quota command
+    addquota_parser = subparsers.add_parser("add-quota", help="Add quota to users (requires kubectl)")
+    addquota_parser.add_argument("users", nargs="*", help="Username(s) to add quota to")
+    addquota_parser.add_argument("--file", "-f", help="CSV or Excel file with usernames")
+    addquota_parser.add_argument("--amount", "-a", type=int, required=True, help="Quota amount to add")
+    addquota_parser.add_argument(
+        "--namespace", "-n", default="jupyterhub", help="Kubernetes namespace (default: jupyterhub)"
+    )
+
+    # List-quota command
+    listquota_parser = subparsers.add_parser("list-quota", help="List all user quota balances (requires kubectl)")
+    listquota_parser.add_argument(
+        "--namespace", "-n", default="jupyterhub", help="Kubernetes namespace (default: jupyterhub)"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -775,6 +1019,12 @@ Environment Variables:
         cmd_set_admin(args, manager)
     elif args.command == "set-passwords":
         cmd_set_passwords(args, manager)
+    elif args.command == "set-quota":
+        cmd_set_quota(args, manager)
+    elif args.command == "add-quota":
+        cmd_add_quota(args, manager)
+    elif args.command == "list-quota":
+        cmd_list_quota(args, manager)
 
 
 if __name__ == "__main__":

@@ -116,23 +116,25 @@ export function GroupList() {
       {/* Top Controls */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="d-flex gap-2">
-          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+          <Button variant="dark" onClick={() => setShowCreateModal(true)}>
             Create Group
           </Button>
+        </div>
+        <div className="d-flex gap-2">
           <Button
             variant="outline-secondary"
             onClick={() => navigate('/users')}
           >
             Back to Users
           </Button>
+          <Button
+            variant="outline-secondary"
+            as="a"
+            href={`${window.jhdata?.base_url ?? '/hub/'}admin`}
+          >
+            Legacy Admin
+          </Button>
         </div>
-        <Button
-          variant="outline-secondary"
-          as="a"
-          href={`${(window as any).jhdata?.base_url || '/hub/'}admin`}
-        >
-          Legacy Admin
-        </Button>
       </div>
 
       {error && (
@@ -180,7 +182,7 @@ export function GroupList() {
               </td>
               <td>
                 <Button
-                  variant="primary"
+                  variant="dark"
                   size="sm"
                   onClick={() => handleEditGroup(group)}
                   className="me-2"
@@ -225,7 +227,7 @@ export function GroupList() {
           <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={createLoading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleCreateGroup} disabled={createLoading}>
+          <Button variant="dark" onClick={handleCreateGroup} disabled={createLoading}>
             {createLoading ? 'Creating...' : 'Create Group'}
           </Button>
         </Modal.Footer>

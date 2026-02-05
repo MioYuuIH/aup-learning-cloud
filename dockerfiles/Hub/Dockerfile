@@ -17,13 +17,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# ========== Global build arguments ==========
+ARG NODE_IMAGE=node:20-alpine
+ARG HUB_IMAGE=quay.io/jupyterhub/k8s-hub:4.1.0
+ARG NPM_REGISTRY=
+ARG PIP_INDEX_URL=
+
 # ========== Stage 1: Build Admin UI ==========
-FROM node:20-alpine AS admin-ui-builder
+FROM ${NODE_IMAGE} AS admin-ui-builder
+ARG NPM_REGISTRY
 
 WORKDIR /app
 
-# Install pnpm
+# Install pnpm and configure registry if specified
 RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
 
 # Copy package files
 COPY admin-ui/package.json admin-ui/pnpm-lock.yaml ./
@@ -38,7 +46,8 @@ COPY admin-ui/ ./
 RUN pnpm run build
 
 # ========== Stage 2: Final Hub Image ==========
-FROM quay.io/jupyterhub/k8s-hub:4.1.0
+FROM ${HUB_IMAGE}
+ARG PIP_INDEX_URL
 
 # Switch to root for setup
 USER root
@@ -59,7 +68,11 @@ COPY --from=admin-ui-builder /app/dist/ /usr/local/share/jupyterhub/static/admin
 RUN chown -R 1000:1000 /usr/local/share/jupyterhub/static/admin-ui/
 
 # Install Python packages as root
-RUN pip install jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator
+RUN if [ -n "${PIP_INDEX_URL}" ]; then \
+        pip install -i "${PIP_INDEX_URL}" jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic; \
+    else \
+        pip install jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic; \
+    fi
 
 # Switch back to jovyan user
 USER jovyan

@@ -69,6 +69,7 @@ After installation completes, open http://localhost:30890 in your browser. No lo
 | `uninstall` | Complete removal of all components |
 | `upgrade-runtime` | Upgrade JupyterHub deployment |
 | `build-images` | Build and import container images |
+| `pull-images` | Pull external images for offline use |
 | `install-tools` | Install Helm and K9s only |
 | `install-runtime` | Deploy JupyterHub only |
 | `remove-runtime` | Remove JupyterHub only |
@@ -81,6 +82,8 @@ sudo ./single-node.sh upgrade-runtime
 # Rebuild images after modifying Dockerfiles
 sudo ./single-node.sh build-images
 ```
+
+> **💡 Tip**: If you need to use alternative container registries or package mirrors, see [Mirror Configuration](deploy/README.md#mirror-configuration).
 ## Manual Installation
 
 For users who prefer step-by-step manual installation or need more control over the deployment process:
@@ -143,6 +146,9 @@ Current environments are set up as `RESOURCE_IMAGES` in `runtime/jupyterhub/file
 ## Documentation
 
 - [JupyterHub Configuration](docs/jupyterhub/README.md) - Detailed JupyterHub settings
+- [Authentication Guide](docs/jupyterhub/authentication-guide.md) - GitHub OAuth and native authentication
+- [User Management Guide](docs/jupyterhub/user-management.md) - Batch user operations with scripts
+- [User Quota System](docs/jupyterhub/quota-system.md) - Resource usage tracking and quota management
 - [GitHub OAuth Setup](docs/jupyterhub/How_to_Setup_GitHub_OAuth.md) - OAuth configuration
 - [Maintenance Manual](docs/user-manual/aup-remote-lab-user-manual-admin-new.md) - Operations guide
 

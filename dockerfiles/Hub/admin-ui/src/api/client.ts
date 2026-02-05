@@ -22,14 +22,14 @@ import type { User, UsersResponse, HubInfo, SetPasswordRequest, Group } from '..
 // Get base URL from window.jhdata
 function getBaseUrl(): string {
   // JupyterHub sets this in window.jhdata
-  const jhdata = (window as any).jhdata || {};
-  return jhdata.base_url || '/hub/';
+  const jhdata = window.jhdata ?? {};
+  return jhdata.base_url ?? '/hub/';
 }
 
 // Get XSRF token from window.jhdata
 function getXsrfToken(): string {
   // Try window.jhdata first (most reliable)
-  const jhdata = (window as any).jhdata || {};
+  const jhdata = window.jhdata ?? {};
   if (jhdata.xsrf_token) {
     return jhdata.xsrf_token;
   }
@@ -214,4 +214,135 @@ export async function removeUserFromGroup(groupName: string, username: string): 
     method: 'DELETE',
     body: JSON.stringify({ users: [username] }),
   });
+}
+
+// ============ Quota API ============
+
+export interface UserQuota {
+  username: string;
+  balance: number;
+  unlimited?: boolean | number;
+  updated_at?: string;
+  recent_transactions?: QuotaTransaction[];
+}
+
+export interface QuotaTransaction {
+  id: number;
+  username: string;
+  amount: number;
+  transaction_type: string;
+  resource_type?: string;
+  description?: string;
+  balance_before: number;
+  balance_after: number;
+  created_at: string;
+  created_by?: string;
+}
+
+export interface QuotaRates {
+  rates: Record<string, number>;
+  minimum_to_start: number;
+  enabled: boolean;
+}
+
+export async function getAllQuota(): Promise<{ users: UserQuota[] }> {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}admin/api/quota`, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to get quota');
+  }
+
+  return response.json();
+}
+
+export async function getUserQuota(username: string): Promise<UserQuota> {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}admin/api/quota/${encodeURIComponent(username)}`, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to get user quota');
+  }
+
+  return response.json();
+}
+
+export async function setUserQuota(
+  username: string,
+  amount: number,
+  action: 'set' | 'add' | 'deduct' = 'set',
+  description?: string
+): Promise<UserQuota> {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}admin/api/quota/${encodeURIComponent(username)}`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ action, amount, description }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to set quota');
+  }
+
+  return response.json();
+}
+
+export async function batchSetQuota(
+  users: Array<{ username: string; amount: number }>
+): Promise<{ success: number; failed: number }> {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}admin/api/quota/batch`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ users }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to batch set quota');
+  }
+
+  return response.json();
+}
+
+export async function setUserUnlimited(
+  username: string,
+  unlimited: boolean
+): Promise<UserQuota> {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}admin/api/quota/${encodeURIComponent(username)}`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ action: 'set_unlimited', unlimited }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to set unlimited status');
+  }
+
+  return response.json();
+}
+
+export async function getQuotaRates(): Promise<QuotaRates> {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}api/quota/rates`, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to get quota rates');
+  }
+
+  return response.json();
 }
