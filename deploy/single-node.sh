@@ -241,6 +241,9 @@ function pull_external_images() {
 
     echo "==========================================="
     echo "Pulling external images for offline deployment..."
+    if [[ -n "${MIRROR_PREFIX}" ]]; then
+        echo "Using mirror prefix: ${MIRROR_PREFIX}"
+    fi
     echo "==========================================="
 
     if [ ! -d "${K3S_IMAGES_DIR}" ]; then
@@ -250,11 +253,22 @@ function pull_external_images() {
     local failed_images=()
 
     for image in "${EXTERNAL_IMAGES[@]}"; do
-        echo "-------------------------------------------"
-        echo "Pulling: ${image}"
+        # Apply mirror prefix if set
+        local pull_image="${image}"
+        if [[ -n "${MIRROR_PREFIX}" ]]; then
+            pull_image="${MIRROR_PREFIX}/${image}"
+        fi
 
-        if docker pull "${image}"; then
-            # Generate filename from image name (replace / and : with -)
+        echo "-------------------------------------------"
+        echo "Pulling: ${pull_image}"
+
+        if docker pull "${pull_image}"; then
+            # Tag back to original name so K3s can use it
+            if [[ -n "${MIRROR_PREFIX}" ]]; then
+                docker tag "${pull_image}" "${image}"
+            fi
+
+            # Generate filename from original image name (replace / and : with -)
             local filename
             filename=$(echo "${image}" | sed 's/[\/:]/-/g').tar
             local out_path="${K3S_IMAGES_DIR}/${filename}"
@@ -267,7 +281,7 @@ function pull_external_images() {
                 failed_images+=("${image}")
             fi
         else
-            echo "Failed to pull: ${image}"
+            echo "Failed to pull: ${pull_image}"
             failed_images+=("${image}")
         fi
     done
