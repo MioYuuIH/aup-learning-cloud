@@ -27,11 +27,16 @@ K3S_IMAGES_DIR="/var/lib/rancher/k3s/agent/images"
 K3S_REGISTRIES_FILE="/etc/rancher/k3s/registries.yaml"
 
 # Registry mirrors (set via environment variables)
-# Example: MIRROR_DOCKER="https://mirror.example.com" ./single-node.sh install
+# Use registry address without https:// prefix
 MIRROR_DOCKER="${MIRROR_DOCKER:-}"
 MIRROR_QUAY="${MIRROR_QUAY:-}"
 MIRROR_K8S="${MIRROR_K8S:-}"
 MIRROR_GHCR="${MIRROR_GHCR:-}"
+
+# Package manager mirrors (set via environment variables)
+# Example: MIRROR_PIP="https://pypi.tuna.tsinghua.edu.cn/simple"
+MIRROR_PIP="${MIRROR_PIP:-}"
+MIRROR_NPM="${MIRROR_NPM:-}"
 
 # Custom images (built locally)
 CUSTOM_IMAGES=(
@@ -227,7 +232,9 @@ function local_image_build() {
         K3S_IMAGES_DIR="${K3S_IMAGES_DIR}" \
         IMAGES="${IMAGES[*]}" \
         MIRROR_DOCKER="${MIRROR_DOCKER}" \
-        MIRROR_QUAY="${MIRROR_QUAY}"
+        MIRROR_QUAY="${MIRROR_QUAY}" \
+        MIRROR_PIP="${MIRROR_PIP}" \
+        MIRROR_NPM="${MIRROR_NPM}"
 
     echo "-------------------------------------------"
 }
@@ -315,18 +322,23 @@ Commands:
   build-images     Build custom images locally
   pull-images      Pull external images for offline use
 
-Registry Mirror Configuration:
-  Set environment variables to use alternative registry mirrors.
-  Use registry address without https:// prefix.
+Mirror Configuration:
+  Set environment variables to use alternative mirrors.
+  Use registry address without https:// prefix for container registries.
 
+  Container Registries:
     MIRROR_DOCKER   Mirror for docker.io (traefik, curl, ubuntu, node)
     MIRROR_QUAY     Mirror for quay.io (jupyterhub components)
     MIRROR_K8S      Mirror for registry.k8s.io (kube-scheduler, pause)
     MIRROR_GHCR     Mirror for ghcr.io (project images)
 
+  Package Managers:
+    MIRROR_PIP      PyPI mirror URL (e.g., https://pypi.example.com/simple)
+    MIRROR_NPM      npm registry URL (e.g., https://registry.example.com)
+
   Example:
     MIRROR_QUAY="quay.mirrors.example.com" \
-    MIRROR_K8S="k8s.mirrors.example.com" \
+    MIRROR_PIP="https://pypi.mirrors.example.com/simple" \
     ./single-node.sh install
 
 EOF

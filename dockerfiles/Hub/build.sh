@@ -25,5 +25,11 @@ fi
 if [ -n "${HUB_IMAGE:-}" ]; then
     BUILD_ARGS="$BUILD_ARGS --build-arg HUB_IMAGE=$HUB_IMAGE"
 fi
+if [ -n "${PIP_INDEX_URL:-}" ]; then
+    BUILD_ARGS="$BUILD_ARGS --build-arg PIP_INDEX_URL=$PIP_INDEX_URL"
+fi
+if [ -n "${NPM_REGISTRY:-}" ]; then
+    BUILD_ARGS="$BUILD_ARGS --build-arg NPM_REGISTRY=$NPM_REGISTRY"
+fi
 
 docker build $BUILD_ARGS -t ghcr.io/amdresearch/auplc-hub:latest .

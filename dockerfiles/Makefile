@@ -11,6 +11,11 @@ K3S_IMAGES_DIR ?= /var/lib/rancher/k3s/agent/images
 MIRROR_DOCKER ?=
 MIRROR_QUAY ?=
 
+# Package manager mirror configuration (optional)
+# Example: make hub MIRROR_PIP=https://pypi.tuna.tsinghua.edu.cn/simple MIRROR_NPM=https://registry.npmmirror.com
+MIRROR_PIP ?=
+MIRROR_NPM ?=
+
 # Build args for docker build (constructed from mirror settings)
 BUILD_ARGS :=
 ifneq ($(MIRROR_DOCKER),)
@@ -20,6 +25,12 @@ endif
 ifneq ($(MIRROR_QUAY),)
   BUILD_ARGS += --build-arg HUB_IMAGE=$(MIRROR_QUAY)/jupyterhub/k8s-hub:4.1.0
   BUILD_ARGS += --build-arg BASE_IMAGE=$(MIRROR_QUAY)/jupyter/base-notebook
+endif
+ifneq ($(MIRROR_PIP),)
+  BUILD_ARGS += --build-arg PIP_INDEX_URL=$(MIRROR_PIP)
+endif
+ifneq ($(MIRROR_NPM),)
+  BUILD_ARGS += --build-arg NPM_REGISTRY=$(MIRROR_NPM)
 endif
 
 .PHONY: all base base-cpu base-gfx1151 hub courses cv dl llm
@@ -53,6 +64,8 @@ hub:
 
 	cd Hub && NODE_IMAGE="$(if $(MIRROR_DOCKER),$(MIRROR_DOCKER)/node:20-alpine,)" \
 		HUB_IMAGE="$(if $(MIRROR_QUAY),$(MIRROR_QUAY)/jupyterhub/k8s-hub:4.1.0,)" \
+		PIP_INDEX_URL="$(MIRROR_PIP)" \
+		NPM_REGISTRY="$(MIRROR_NPM)" \
 		bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-hub:latest
 
