@@ -127,16 +127,54 @@ function configure_registry_mirrors() {
     echo "Registry mirrors configured at ${K3S_REGISTRIES_FILE}"
 }
 
+function setup_dummy_interface() {
+    # Create a dummy network interface for offline operation
+    # K3s requires a default route to detect node IP and for kube-proxy routing
+    # This dummy interface provides a fallback route when external network is disconnected
+    # Reference: https://docs.k3s.io/installation/airgap
+
+    if ip link show dummy0 &>/dev/null; then
+        echo "Dummy interface already exists, skipping setup"
+        return 0
+    fi
+
+    echo "Setting up dummy network interface for offline operation..."
+    sudo ip link add dummy0 type dummy
+    sudo ip link set dummy0 up
+    sudo ip addr add 203.0.113.254/31 dev dummy0
+    sudo ip route add default via 203.0.113.255 dev dummy0 metric 1000
+
+    # Make persistent across reboots
+    cat << 'EOF' | sudo tee /etc/systemd/system/dummy-interface.service > /dev/null
+[Unit]
+Description=Setup dummy network interface for K3s offline operation
+Before=k3s.service
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c 'ip link show dummy0 || (ip link add dummy0 type dummy && ip link set dummy0 up && ip addr add 203.0.113.254/31 dev dummy0 && ip route add default via 203.0.113.255 dev dummy0 metric 1000)'
+ExecStop=/bin/bash -c 'ip link del dummy0 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo systemctl daemon-reload
+    sudo systemctl enable dummy-interface.service
+    echo "Dummy interface configured for offline operation"
+}
+
 function install_k3s_single_node() {
     echo "Starting K3s installation..."
+
+    # Setup dummy interface for offline operation
+    setup_dummy_interface
 
     # Configure registry mirrors before starting k3s
     configure_registry_mirrors
 
-    # Use localhost binding for offline single-node deployment
-    # This ensures K3s works even when external network is disconnected
-    curl -sfL https://get.k3s.io | sudo K3S_KUBECONFIG_MODE="644" \
-        INSTALL_K3S_EXEC="--bind-address=127.0.0.1 --advertise-address=127.0.0.1" sh -
+    curl -sfL https://get.k3s.io | sudo K3S_KUBECONFIG_MODE="644" sh -
 
     echo "Configuring kubeconfig for user: $(whoami)"
     mkdir -p "$HOME/.kube"
@@ -171,6 +209,20 @@ function remove_k3s() {
 
     echo "Removing K3S local data"
     sudo rm -rf /var/lib/rancher/k3s
+
+    # Remove dummy interface service
+    if [[ -f /etc/systemd/system/dummy-interface.service ]]; then
+        echo "Removing dummy interface service..."
+        sudo systemctl disable dummy-interface.service 2>/dev/null || true
+        sudo rm -f /etc/systemd/system/dummy-interface.service
+        sudo systemctl daemon-reload
+    fi
+
+    # Remove dummy interface
+    if ip link show dummy0 &>/dev/null; then
+        echo "Removing dummy interface..."
+        sudo ip link del dummy0
+    fi
 }
 
 function deploy_rocm_gpu_device_plugin() {
