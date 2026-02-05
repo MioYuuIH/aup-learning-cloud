@@ -26,15 +26,12 @@ set -euo pipefail
 K3S_IMAGES_DIR="/var/lib/rancher/k3s/agent/images"
 K3S_REGISTRIES_FILE="/etc/rancher/k3s/registries.yaml"
 
-# Registry mirrors (set via environment variables)
-# Use registry address without https:// prefix
-MIRROR_DOCKER="${MIRROR_DOCKER:-}"
-MIRROR_QUAY="${MIRROR_QUAY:-}"
-MIRROR_K8S="${MIRROR_K8S:-}"
-MIRROR_GHCR="${MIRROR_GHCR:-}"
+# Registry mirror prefix (set via environment variable)
+# Example: MIRROR_PREFIX="m.daocloud.io" will transform:
+#   quay.io/jupyterhub/k8s-hub:4.1.0 -> m.daocloud.io/quay.io/jupyterhub/k8s-hub:4.1.0
+MIRROR_PREFIX="${MIRROR_PREFIX:-}"
 
 # Package manager mirrors (set via environment variables)
-# Example: MIRROR_PIP="https://pypi.tuna.tsinghua.edu.cn/simple"
 MIRROR_PIP="${MIRROR_PIP:-}"
 MIRROR_NPM="${MIRROR_NPM:-}"
 
@@ -96,36 +93,31 @@ function install_tools() {
 }
 
 function configure_registry_mirrors() {
-    # Configure K3s registry mirrors if any MIRROR_* variables are set
+    # Configure K3s registry mirrors using MIRROR_PREFIX
     # This must be done BEFORE k3s starts
 
-    if [[ -z "${MIRROR_DOCKER}" && -z "${MIRROR_QUAY}" && -z "${MIRROR_K8S}" && -z "${MIRROR_GHCR}" ]]; then
-        echo "No registry mirrors configured. Using default registries."
+    if [[ -z "${MIRROR_PREFIX}" ]]; then
+        echo "No registry mirror configured. Using default registries."
         return 0
     fi
 
-    echo "Configuring registry mirrors..."
+    echo "Configuring registry mirrors with prefix: ${MIRROR_PREFIX}"
     sudo mkdir -p "$(dirname "${K3S_REGISTRIES_FILE}")"
 
-    local config="mirrors:"
-
-    # Note: MIRROR_* should be registry address without https:// prefix
-    # e.g., MIRROR_QUAY=quay.m.daocloud.io (not https://quay.m.daocloud.io)
-    if [[ -n "${MIRROR_DOCKER}" ]]; then
-        config+=$'\n'"  docker.io:"$'\n'"    endpoint:"$'\n'"      - \"https://${MIRROR_DOCKER}\""
-    fi
-
-    if [[ -n "${MIRROR_QUAY}" ]]; then
-        config+=$'\n'"  quay.io:"$'\n'"    endpoint:"$'\n'"      - \"https://${MIRROR_QUAY}\""
-    fi
-
-    if [[ -n "${MIRROR_K8S}" ]]; then
-        config+=$'\n'"  registry.k8s.io:"$'\n'"    endpoint:"$'\n'"      - \"https://${MIRROR_K8S}\""
-    fi
-
-    if [[ -n "${MIRROR_GHCR}" ]]; then
-        config+=$'\n'"  ghcr.io:"$'\n'"    endpoint:"$'\n'"      - \"https://${MIRROR_GHCR}\""
-    fi
+    # Configure mirrors for all registries using the prefix pattern
+    local config="mirrors:
+  docker.io:
+    endpoint:
+      - \"https://${MIRROR_PREFIX}/docker.io\"
+  quay.io:
+    endpoint:
+      - \"https://${MIRROR_PREFIX}/quay.io\"
+  registry.k8s.io:
+    endpoint:
+      - \"https://${MIRROR_PREFIX}/registry.k8s.io\"
+  ghcr.io:
+    endpoint:
+      - \"https://${MIRROR_PREFIX}/ghcr.io\""
 
     echo "${config}" | sudo tee "${K3S_REGISTRIES_FILE}" > /dev/null
     echo "Registry mirrors configured at ${K3S_REGISTRIES_FILE}"
@@ -231,8 +223,7 @@ function local_image_build() {
     cd ../dockerfiles/ && make \
         K3S_IMAGES_DIR="${K3S_IMAGES_DIR}" \
         IMAGES="${IMAGES[*]}" \
-        MIRROR_DOCKER="${MIRROR_DOCKER}" \
-        MIRROR_QUAY="${MIRROR_QUAY}" \
+        MIRROR_PREFIX="${MIRROR_PREFIX}" \
         MIRROR_PIP="${MIRROR_PIP}" \
         MIRROR_NPM="${MIRROR_NPM}"
 
@@ -324,21 +315,18 @@ Commands:
 
 Mirror Configuration:
   Set environment variables to use alternative mirrors.
-  Use registry address without https:// prefix for container registries.
 
   Container Registries:
-    MIRROR_DOCKER   Mirror for docker.io (traefik, curl, ubuntu, node)
-    MIRROR_QUAY     Mirror for quay.io (jupyterhub components)
-    MIRROR_K8S      Mirror for registry.k8s.io (kube-scheduler, pause)
-    MIRROR_GHCR     Mirror for ghcr.io (project images)
+    MIRROR_PREFIX   Registry mirror prefix (without https://)
+                    Transforms: quay.io/image -> <prefix>/quay.io/image
 
   Package Managers:
-    MIRROR_PIP      PyPI mirror URL (e.g., https://pypi.example.com/simple)
-    MIRROR_NPM      npm registry URL (e.g., https://registry.example.com)
+    MIRROR_PIP      PyPI mirror URL
+    MIRROR_NPM      npm registry URL
 
   Example:
-    MIRROR_QUAY="quay.mirrors.example.com" \
-    MIRROR_PIP="https://pypi.mirrors.example.com/simple" \
+    MIRROR_PREFIX="mirror.example.com" \
+    MIRROR_PIP="https://pypi.example.com/simple" \
     ./single-node.sh install
 
 EOF

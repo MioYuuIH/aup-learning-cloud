@@ -17,10 +17,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# ========== Stage 1: Build Admin UI ==========
+# ========== Global build arguments ==========
 ARG NODE_IMAGE=node:20-alpine
+ARG HUB_IMAGE=quay.io/jupyterhub/k8s-hub:4.1.0
 ARG NPM_REGISTRY=
+ARG PIP_INDEX_URL=
+
+# ========== Stage 1: Build Admin UI ==========
 FROM ${NODE_IMAGE} AS admin-ui-builder
+ARG NPM_REGISTRY
 
 WORKDIR /app
 
@@ -41,9 +46,8 @@ COPY admin-ui/ ./
 RUN pnpm run build
 
 # ========== Stage 2: Final Hub Image ==========
-ARG HUB_IMAGE=quay.io/jupyterhub/k8s-hub:4.1.0
-ARG PIP_INDEX_URL=
 FROM ${HUB_IMAGE}
+ARG PIP_INDEX_URL
 
 # Switch to root for setup
 USER root

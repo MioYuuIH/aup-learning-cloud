@@ -4,27 +4,21 @@ SHELL := /bin/bash
 
 K3S_IMAGES_DIR ?= /var/lib/rancher/k3s/agent/images
 
-# Registry mirror configuration (optional)
-# Set these to use alternative registry mirrors for base images
-# Use registry address without https:// prefix
-# Example: make hub MIRROR_DOCKER=docker.mirrors.example.com MIRROR_QUAY=quay.mirrors.example.com
-MIRROR_DOCKER ?=
-MIRROR_QUAY ?=
-
-# Package manager mirror configuration (optional)
-# Example: make hub MIRROR_PIP=https://pypi.tuna.tsinghua.edu.cn/simple MIRROR_NPM=https://registry.npmmirror.com
+# Mirror configuration (optional)
+# MIRROR_PREFIX: Registry mirror prefix (e.g., mirror.example.com)
+#   Transforms: quay.io/image -> mirror.example.com/quay.io/image
+# MIRROR_PIP: PyPI mirror URL
+# MIRROR_NPM: npm registry URL
+MIRROR_PREFIX ?=
 MIRROR_PIP ?=
 MIRROR_NPM ?=
 
 # Build args for docker build (constructed from mirror settings)
 BUILD_ARGS :=
-ifneq ($(MIRROR_DOCKER),)
-  BUILD_ARGS += --build-arg NODE_IMAGE=$(MIRROR_DOCKER)/node:20-alpine
-  BUILD_ARGS += --build-arg BASE_IMAGE=$(MIRROR_DOCKER)/ubuntu:24.04
-endif
-ifneq ($(MIRROR_QUAY),)
-  BUILD_ARGS += --build-arg HUB_IMAGE=$(MIRROR_QUAY)/jupyterhub/k8s-hub:4.1.0
-  BUILD_ARGS += --build-arg BASE_IMAGE=$(MIRROR_QUAY)/jupyter/base-notebook
+ifneq ($(MIRROR_PREFIX),)
+  BUILD_ARGS += --build-arg NODE_IMAGE=$(MIRROR_PREFIX)/docker.io/library/node:20-alpine
+  BUILD_ARGS += --build-arg HUB_IMAGE=$(MIRROR_PREFIX)/quay.io/jupyterhub/k8s-hub:4.1.0
+  BUILD_ARGS += --build-arg BASE_IMAGE=$(MIRROR_PREFIX)/docker.io/library/ubuntu:24.04
 endif
 ifneq ($(MIRROR_PIP),)
   BUILD_ARGS += --build-arg PIP_INDEX_URL=$(MIRROR_PIP)
@@ -62,8 +56,8 @@ hub:
 	 	echo "Building Hub Image..."; \
 		echo "-------------------------------------------";
 
-	cd Hub && NODE_IMAGE="$(if $(MIRROR_DOCKER),$(MIRROR_DOCKER)/node:20-alpine,)" \
-		HUB_IMAGE="$(if $(MIRROR_QUAY),$(MIRROR_QUAY)/jupyterhub/k8s-hub:4.1.0,)" \
+	cd Hub && NODE_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/docker.io/library/node:20-alpine,)" \
+		HUB_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/quay.io/jupyterhub/k8s-hub:4.1.0,)" \
 		PIP_INDEX_URL="$(MIRROR_PIP)" \
 		NPM_REGISTRY="$(MIRROR_NPM)" \
 		bash ./build.sh
