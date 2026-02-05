@@ -26,6 +26,11 @@ FROM $BASE_IMAGE
 LABEL maintainer="Jupyter Project <jupyter@googlegroups.com>"
 
 ARG JUPYTERHUB_VERSION=""
+ARG PIP_INDEX_URL=
+
+# Set pip index URL if specified
+RUN if [ -n "${PIP_INDEX_URL}" ]; then pip config set global.index-url "${PIP_INDEX_URL}"; fi
+
 RUN if [ -n "$JUPYTERHUB_VERSION" ]; then python3 -mpip install --no-cache --upgrade --upgrade-strategy only-if-needed jupyterhub=="$JUPYTERHUB_VERSION"; fi
 
 # Install server timer extension (displays remaining time in JupyterLab status bar)
