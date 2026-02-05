@@ -69,6 +69,7 @@ After installation completes, open http://localhost:30890 in your browser. No lo
 | `uninstall` | Complete removal of all components |
 | `upgrade-runtime` | Upgrade JupyterHub deployment |
 | `build-images` | Build and import container images |
+| `pull-images` | Pull external images for offline use |
 | `install-tools` | Install Helm and K9s only |
 | `install-runtime` | Deploy JupyterHub only |
 | `remove-runtime` | Remove JupyterHub only |
@@ -81,6 +82,8 @@ sudo ./single-node.sh upgrade-runtime
 # Rebuild images after modifying Dockerfiles
 sudo ./single-node.sh build-images
 ```
+
+> **💡 Tip**: If you need to use alternative container registries or package mirrors, see [Mirror Configuration](deploy/README.md#mirror-configuration).
 ## Manual Installation
 
 For users who prefer step-by-step manual installation or need more control over the deployment process:
