@@ -452,6 +452,20 @@ echo $PATH
 
 ## Advanced Configuration
 
+### Offline Operation
+
+The single-node deployment script automatically configures the system for offline operation. When you run `./single-node.sh install`, it:
+
+1. **Creates a dummy network interface** (`dummy0`) with a low-priority default route
+2. **Pre-pulls all required container images** to local storage
+3. **Configures K3s to use local images** from `/var/lib/rancher/k3s/agent/images/`
+
+This ensures the cluster remains fully functional even when the external network is disconnected (e.g., network cable unplugged, WiFi unavailable).
+
+**How it works**: K3s requires a default route to detect the node IP. The dummy interface provides a fallback route (`metric 1000`) that only takes effect when no other network is available. This doesn't affect normal network operation.
+
+**Reference**: [K3s Air-Gap Installation](https://docs.k3s.io/installation/airgap)
+
 ### Mirror Configuration
 
 If you need to use alternative mirrors for container registries or package managers, you can configure them via environment variables when running the deployment script.
