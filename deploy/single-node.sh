@@ -24,14 +24,36 @@ set -euo pipefail
 
 # k3s image dir
 K3S_IMAGES_DIR="/var/lib/rancher/k3s/agent/images"
-# Docker images version
-IMAGES=(
+
+# Custom images (built locally)
+CUSTOM_IMAGES=(
     "ghcr.io/amdresearch/auplc-hub:latest"
     "ghcr.io/amdresearch/auplc-default:latest"
     "ghcr.io/amdresearch/auplc-cv:latest"
     "ghcr.io/amdresearch/auplc-dl:latest"
     "ghcr.io/amdresearch/auplc-llm:latest"
 )
+
+# External images required by JupyterHub (for offline deployment)
+EXTERNAL_IMAGES=(
+    # JupyterHub core components
+    "quay.io/jupyterhub/k8s-hub:4.1.0"
+    "quay.io/jupyterhub/configurable-http-proxy:4.6.3"
+    "quay.io/jupyterhub/k8s-secret-sync:4.1.0"
+    "quay.io/jupyterhub/k8s-network-tools:4.1.0"
+    "quay.io/jupyterhub/k8s-image-awaiter:4.1.0"
+    "quay.io/jupyterhub/k8s-singleuser-sample:4.1.0"
+    # Kubernetes components
+    "registry.k8s.io/kube-scheduler:v1.30.8"
+    "registry.k8s.io/pause:3.10"
+    # Traefik proxy
+    "traefik:v3.3.1"
+    # Utility images
+    "curlimages/curl:8.5.0"
+)
+
+# Combined list for backward compatibility
+IMAGES=("${CUSTOM_IMAGES[@]}")
 
 function check_root() {
     if [[ $EUID -ne 0 ]]; then
@@ -159,10 +181,66 @@ function local_image_build() {
     echo "-------------------------------------------"
 }
 
+function pull_external_images() {
+    # Pull and save external images required for offline deployment
+    # This ensures JupyterHub can run without internet access
+
+    if ! command -v docker &> /dev/null; then
+        echo "Please install docker"
+        exit 1
+    fi
+
+    echo "==========================================="
+    echo "Pulling external images for offline deployment..."
+    echo "==========================================="
+
+    if [ ! -d "${K3S_IMAGES_DIR}" ]; then
+        sudo mkdir -p "${K3S_IMAGES_DIR}"
+    fi
+
+    local failed_images=()
+
+    for image in "${EXTERNAL_IMAGES[@]}"; do
+        echo "-------------------------------------------"
+        echo "Pulling: ${image}"
+
+        if docker pull "${image}"; then
+            # Generate filename from image name (replace / and : with -)
+            local filename
+            filename=$(echo "${image}" | sed 's/[\/:]/-/g').tar
+            local out_path="${K3S_IMAGES_DIR}/${filename}"
+
+            echo "Saving to: ${out_path}"
+            if sudo docker save "${image}" -o "${out_path}"; then
+                echo "Saved: ${image}"
+            else
+                echo "Failed to save: ${image}"
+                failed_images+=("${image}")
+            fi
+        else
+            echo "Failed to pull: ${image}"
+            failed_images+=("${image}")
+        fi
+    done
+
+    echo "==========================================="
+    if [ ${#failed_images[@]} -eq 0 ]; then
+        echo "All external images pulled and saved successfully!"
+    else
+        echo "Failed images:"
+        for img in "${failed_images[@]}"; do
+            echo "  - ${img}"
+        done
+        echo "Warning: Some images failed. Deployment may require internet access."
+    fi
+    echo "==========================================="
+}
+
 function deploy_all_components() {
     install_tools
     install_k3s_single_node
     deploy_rocm_gpu_device_plugin
+    pull_external_images
     local_image_build
     deply_aup_learning_cloud_runtime
 }
@@ -173,7 +251,7 @@ function remove_all_components() {
 }
 
 if [[ $# -eq 0 ]]; then
-    echo "Usage: $0 {install|uninstall|install-tools|install-runtime|remove-runtime|upgrade-runtime|build-images}"
+    echo "Usage: $0 {install|uninstall|install-tools|install-runtime|remove-runtime|upgrade-runtime|build-images|pull-images}"
     exit 1
 fi
 
@@ -185,5 +263,6 @@ case "$1" in
     remove-runtime) remove_aup_learning_cloud_runtime ;;
     upgrade-runtime) upgrade_aup_learning_cloud_runtime ;;
     build-images) local_image_build ;;
-    *) echo "Usage: $0 {install|uninstall|install-tools|install-runtime|remove-runtime|upgrade-runtime|build-images}"; exit 1 ;;
+    pull-images) pull_external_images ;;
+    *) echo "Usage: $0 {install|uninstall|install-tools|install-runtime|remove-runtime|upgrade-runtime|build-images|pull-images}"; exit 1 ;;
 esac
