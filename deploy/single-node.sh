@@ -127,10 +127,13 @@ function configure_registry_mirrors() {
     echo "Registry mirrors configured at ${K3S_REGISTRIES_FILE}"
 }
 
+# Dummy interface IP for K3s node binding
+# Using a private IP range that won't conflict with typical networks
+K3S_NODE_IP="10.255.255.1"
+
 function setup_dummy_interface() {
-    # Create a dummy network interface for offline operation
-    # K3s requires a default route to detect node IP and for kube-proxy routing
-    # This dummy interface provides a fallback route when external network is disconnected
+    # Create a dummy network interface for offline/portable operation
+    # This provides a stable node IP that doesn't change when WiFi/network changes
     # Reference: https://docs.k3s.io/installation/airgap
 
     if ip link show dummy0 &>/dev/null; then
@@ -138,23 +141,24 @@ function setup_dummy_interface() {
         return 0
     fi
 
-    echo "Setting up dummy network interface for offline operation..."
+    echo "Setting up dummy network interface for portable operation..."
     sudo ip link add dummy0 type dummy
     sudo ip link set dummy0 up
-    sudo ip addr add 203.0.113.254/31 dev dummy0
-    sudo ip route add default via 203.0.113.255 dev dummy0 metric 1000
+    sudo ip addr add ${K3S_NODE_IP}/32 dev dummy0
+    # Add a low-priority default route so K3s can detect a valid route
+    sudo ip route add default via ${K3S_NODE_IP} dev dummy0 metric 1000 2>/dev/null || true
 
     # Make persistent across reboots
-    cat << 'EOF' | sudo tee /etc/systemd/system/dummy-interface.service > /dev/null
+    cat << EOF | sudo tee /etc/systemd/system/dummy-interface.service > /dev/null
 [Unit]
-Description=Setup dummy network interface for K3s offline operation
+Description=Setup dummy network interface for K3s portable operation
 Before=k3s.service
 After=network.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/bash -c 'ip link show dummy0 || (ip link add dummy0 type dummy && ip link set dummy0 up && ip addr add 203.0.113.254/31 dev dummy0 && ip route add default via 203.0.113.255 dev dummy0 metric 1000)'
+ExecStart=/bin/bash -c 'ip link show dummy0 || (ip link add dummy0 type dummy && ip link set dummy0 up && ip addr add ${K3S_NODE_IP}/32 dev dummy0 && ip route add default via ${K3S_NODE_IP} dev dummy0 metric 1000 2>/dev/null || true)'
 ExecStop=/bin/bash -c 'ip link del dummy0 2>/dev/null || true'
 
 [Install]
@@ -162,7 +166,7 @@ WantedBy=multi-user.target
 EOF
     sudo systemctl daemon-reload
     sudo systemctl enable dummy-interface.service
-    echo "Dummy interface configured for offline operation"
+    echo "Dummy interface configured with IP: ${K3S_NODE_IP}"
 }
 
 function install_k3s_single_node() {
@@ -174,7 +178,10 @@ function install_k3s_single_node() {
     # Configure registry mirrors before starting k3s
     configure_registry_mirrors
 
-    curl -sfL https://get.k3s.io | sudo K3S_KUBECONFIG_MODE="644" sh -
+    # Bind K3s to dummy interface IP for portable operation
+    # This ensures K3s works regardless of which network is connected
+    curl -sfL https://get.k3s.io | sudo K3S_KUBECONFIG_MODE="644" \
+        INSTALL_K3S_EXEC="--node-ip=${K3S_NODE_IP} --flannel-iface=dummy0" sh -
 
     echo "Configuring kubeconfig for user: $(whoami)"
     mkdir -p "$HOME/.kube"
