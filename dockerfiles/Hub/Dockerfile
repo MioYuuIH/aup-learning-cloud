@@ -59,7 +59,7 @@ RUN mkdir -p /tmp/custom_templates/static/js
 RUN mkdir -p /usr/local/share/jupyterhub/static/admin-ui
 
 # Copy template files with correct permissions
-COPY --chmod=644 runtime/jupyterhub/hub-templates/ /tmp/custom_templates/
+COPY --chmod=644 runtime/jupyterhub/frontend/templates/ /tmp/custom_templates/
 
 # Copy admin-ui build output
 COPY --from=admin-ui-builder /app/dist/ /usr/local/share/jupyterhub/static/admin-ui/
