@@ -82,6 +82,53 @@ class QuotaManager:
         finally:
             session.close()
 
+    def can_start_container(
+        self,
+        username: str,
+        accelerator_type: str,
+        runtime_minutes: int,
+        quota_rates: dict[str, int],
+        default_quota: int = 0,
+    ) -> tuple[bool, str, int]:
+        """
+        Check if user can start a container based on quota.
+
+        Args:
+            username: The user's username
+            accelerator_type: The accelerator type (e.g., 'phx', 'strix', 'cpu')
+            runtime_minutes: Requested runtime in minutes
+            quota_rates: Mapping of accelerator type to quota rate per minute
+            default_quota: Default quota to grant if user has no record
+
+        Returns:
+            Tuple of (can_start, message, estimated_cost)
+        """
+        username = username.lower()
+
+        # Ensure user has quota record
+        balance = self.ensure_user_quota(username, default_quota)
+
+        # Check if user has unlimited quota
+        if self.is_unlimited(username):
+            return (True, "Unlimited quota", 0)
+
+        # Calculate estimated cost
+        rate = quota_rates.get(accelerator_type, quota_rates.get("cpu", 1))
+        estimated_cost = runtime_minutes * rate
+
+        if balance <= 0:
+            return (False, f"Insufficient quota (balance: {balance})", estimated_cost)
+
+        if balance < estimated_cost:
+            max_runtime = balance // rate if rate > 0 else 0
+            return (
+                False,
+                f"Insufficient quota for {runtime_minutes} min (balance: {balance}, need: {estimated_cost}, max: {max_runtime} min)",
+                estimated_cost,
+            )
+
+        return (True, f"OK (balance: {balance}, cost: {estimated_cost})", estimated_cost)
+
     def ensure_user_quota(self, username: str, default_quota: int = 0) -> int:
         """
         Ensure user has a quota record. If user doesn't exist and default_quota > 0,
@@ -239,6 +286,9 @@ class QuotaManager:
             session.flush()
             return usage_session.id
 
+    # Alias for backwards compatibility
+    start_usage_session = start_session
+
     def end_session(self, session_id: int, quota_consumed: int = 0) -> dict | None:
         """End a usage session."""
         with session_scope() as session:
@@ -261,6 +311,54 @@ class QuotaManager:
                 "duration_minutes": int(duration),
                 "quota_consumed": quota_consumed,
             }
+
+    def end_usage_session(self, session_id: int, quota_rates: dict[str, int]) -> tuple[int, int]:
+        """
+        End a usage session and calculate quota consumed.
+
+        Args:
+            session_id: The session ID to end
+            quota_rates: Mapping of resource_type to quota rate per minute
+
+        Returns:
+            Tuple of (duration_minutes, quota_consumed)
+        """
+        with session_scope() as session:
+            usage_session = session.query(UsageSession).filter(UsageSession.id == session_id).first()
+            if not usage_session or usage_session.status != "active":
+                return (0, 0)
+
+            end_time = datetime.now()
+            duration_minutes = int((end_time - usage_session.start_time).total_seconds() / 60)
+
+            # Calculate quota based on resource type and duration
+            rate = quota_rates.get(usage_session.resource_type, 1)
+            quota_consumed = duration_minutes * rate
+
+            usage_session.end_time = end_time
+            usage_session.duration_minutes = duration_minutes
+            usage_session.quota_consumed = quota_consumed
+            usage_session.status = "completed"
+
+            # Deduct quota from user balance
+            if quota_consumed > 0:
+                user = session.query(UserQuota).filter(UserQuota.username == usage_session.username).first()
+                if user and not user.unlimited:
+                    balance_before = user.balance
+                    user.balance = max(0, balance_before - quota_consumed)
+
+                    transaction = QuotaTransaction(
+                        username=usage_session.username,
+                        amount=-quota_consumed,
+                        transaction_type="usage",
+                        resource_type=usage_session.resource_type,
+                        balance_before=balance_before,
+                        balance_after=user.balance,
+                        description=f"Session {session_id}: {duration_minutes} min @ {rate}/min",
+                    )
+                    session.add(transaction)
+
+            return (duration_minutes, quota_consumed)
 
     def get_active_session(self, username: str) -> dict | None:
         """Get user's active session if any."""

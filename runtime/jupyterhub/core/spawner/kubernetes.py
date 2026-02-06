@@ -76,7 +76,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
     github_org_name: str = ""
     auth_mode: str = "auto-login"
     single_node_mode: bool = False
-    quota_enabled: bool = False
+    quota_enabled: bool | None = False
 
     # Resource configuration (set from config)
     resource_images: dict[str, str] = {}
