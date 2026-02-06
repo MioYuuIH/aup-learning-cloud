@@ -243,13 +243,13 @@ hub:
 
   # Environment variables from secrets (for auto-admin feature)
   extraEnv:
-    - name: JUPYTERHUB_API_TOKEN
+    JUPYTERHUB_API_TOKEN:
       valueFrom:
         secretKeyRef:
           name: jupyterhub-admin-credentials
           key: api-token
           optional: true
-    - name: JUPYTERHUB_ADMIN_PASSWORD
+    JUPYTERHUB_ADMIN_PASSWORD:
       valueFrom:
         secretKeyRef:
           name: jupyterhub-admin-credentials
