@@ -31,7 +31,141 @@ enabled:
 
 # custom can contain anything you want to pass to the hub pod, as all passed
 # Helm template values will be made available there.
-custom: {}
+custom:
+  # Authentication mode: "auto-login" | "dummy" | "github" | "multi"
+  #   - auto-login: No credentials required, auto-login as 'student' (default, for single-node)
+  #   - dummy: Accept any username/password (for testing)
+  #   - github: GitHub OAuth authentication
+  #   - multi: GitHub OAuth + Local accounts
+  authMode: "auto-login"
+
+  # Auto-create admin user on first install (optional)
+  adminUser:
+    enabled: false
+
+  # Accelerator configuration (GPU/NPU nodes)
+  # This centralizes all accelerator info: display, node selector, env, quota rate
+  accelerators:
+    # GPU accelerators
+    phx:
+      displayName: "AMD Radeon™ 780M (Phoenix Point iGPU)"
+      description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
+      nodeSelector:
+        node-type: phx
+      env:
+        HSA_OVERRIDE_GFX_VERSION: "11.0.0"
+      quotaRate: 2
+    strix:
+      displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
+      description: "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X"
+      nodeSelector:
+        node-type: strix
+      env: {}
+      quotaRate: 2
+    strix-halo:
+      displayName: "AMD Radeon™ 8060S (Strix Halo iGPU)"
+      description: "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X"
+      nodeSelector:
+        node-type: strix-halo
+      env: {}
+      quotaRate: 3
+    dgpu:
+      displayName: "AMD Radeon™ 9070XT (Desktop GPU)"
+      description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6"
+      nodeSelector:
+        node-type: dgpu
+      env: {}
+      quotaRate: 4
+    # NPU accelerators (note: uses "type" label, not "node-type")
+    strix-npu:
+      displayName: "AMD XDNA2 (Strix Point NPU)"
+      description: "AMD XDNA2 NPU with AI acceleration"
+      nodeSelector:
+        type: strix
+      env: {}
+      quotaRate: 1
+
+  # Resource images and requirements
+  resources:
+    images:
+      cpu: "ghcr.io/amdresearch/auplc-default:latest"
+      Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
+      Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
+      Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
+      Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
+
+    requirements:
+      cpu:
+        cpu: "2"
+        memory: "4Gi"
+        memory_limit: "6Gi"
+      Course-CV:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-DL:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-LLM:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-PhySim:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      none:
+        cpu: "2"
+        memory: "4Gi"
+        memory_limit: "6Gi"
+
+  # Team to resource mapping
+  teams:
+    mapping:
+      cpu:
+        - cpu
+      gpu:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      official:
+        - cpu
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      AUP:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      native-users:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+
+  # User quota management system
+  quota:
+    # Enable/disable quota system (auto-disabled for auto-login/dummy modes if not set)
+    enabled: null
+
+    # CPU-only quota rate (when no accelerator selected)
+    cpuRate: 1
+
+    # Minimum quota required to start any container
+    minimumToStart: 10
+
+    # Default quota for new users (0 = no initial allocation)
+    defaultQuota: 0
+
+    # Auto-refresh rules: each rule generates a K8s CronJob
+    refreshRules: {}
 
 # imagePullSecret is configuration to create a k8s Secret that Helm chart's pods
 # can get credentials from to pull their images.
@@ -100,7 +234,20 @@ hub:
   args: []
   extraConfig: {}
   extraFiles: {}
-  extraEnv: {}
+  extraEnv:
+    # Environment variables from secrets (for auto-admin feature)
+    JUPYTERHUB_API_TOKEN:
+      valueFrom:
+        secretKeyRef:
+          name: jupyterhub-admin-credentials
+          key: api-token
+          optional: true
+    JUPYTERHUB_ADMIN_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: jupyterhub-admin-credentials
+          key: admin-password
+          optional: true
   extraContainers: []
   extraVolumes: []
   extraVolumeMounts: []
@@ -123,7 +270,10 @@ hub:
       drop: ["ALL"]
   lifecycle: {}
   loadRoles: {}
-  services: {}
+  services:
+    # Service account for quota refresh CronJob
+    quota-refresh:
+      admin: true
   pdb:
     enabled: false
     maxUnavailable:

@@ -18,203 +18,39 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# AUP Learning Cloud - Default Configuration
+# AUP Learning Cloud - Deployment Configuration
 #
 # Deploy with:
 #   helm install jupyterhub ./jupyterhub -n jupyterhub --create-namespace -f values.yaml
-
-# Authentication mode: "auto-login" | "dummy" | "github" | "multi"
-#   - auto-login: No credentials required, auto-login as 'student' (default, for single-node)
-#   - dummy: Accept any username/password (for testing)
-#   - github: GitHub OAuth authentication
-#   - multi: GitHub OAuth + Local accounts
 #
-# Auto-create admin user on first install (optional)
-# When enabled, helm install will:
-# 1. Generate random API token and admin password
-# 2. Store them in jupyterhub-admin-credentials secret
-# 3. Auto-configure admin user on hub startup
-# To get credentials after install:
-#   kubectl -n jupyterhub get secret jupyterhub-admin-credentials -o jsonpath='{.data.admin-password}' | base64 -d
-#   kubectl -n jupyterhub get secret jupyterhub-admin-credentials -o jsonpath='{.data.api-token}' | base64 -d
-custom:
-  authMode: "auto-login"
-  adminUser:
-    enabled: false  # Set to true to enable auto-admin creation
+# This file contains environment-specific overrides.
+# See jupyterhub/values.yaml for all available options and defaults.
 
-  # Accelerator configuration (GPU/NPU nodes)
-  # This centralizes all accelerator info: display, node selector, env, quota rate
-  accelerators:
-    # GPU accelerators
-    phx:
-      displayName: "AMD Radeon™ 780M (Phoenix Point iGPU)"
-      description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
-      nodeSelector:
-        node-type: phx
-      env:
-        HSA_OVERRIDE_GFX_VERSION: "11.0.0"
-      quotaRate: 2
-    strix:
-      displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
-      description: "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X"
-      nodeSelector:
-        node-type: strix
-      env: {}
-      quotaRate: 2
-    strix-halo:
-      displayName: "AMD Radeon™ 8060S (Strix Halo iGPU)"
-      description: "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X"
-      nodeSelector:
-        node-type: strix-halo
-      env: {}
-      quotaRate: 3
-    dgpu:
-      displayName: "AMD Radeon™ 9070XT (Desktop GPU)"
-      description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6"
-      nodeSelector:
-        node-type: dgpu
-      env: {}
-      quotaRate: 4
-    # NPU accelerators (note: uses "type" label, not "node-type")
-    strix-npu:
-      displayName: "AMD XDNA2 (Strix Point NPU)"
-      description: "AMD XDNA2 NPU with AI acceleration"
-      nodeSelector:
-        type: strix
-      env: {}
-      quotaRate: 1
-
-  # Resource images and requirements
-  resources:
-    images:
-      cpu: "ghcr.io/amdresearch/auplc-default:latest"
-      Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
-      Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
-      Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
-      Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
-
-    requirements:
-      cpu:
-        cpu: "2"
-        memory: "4Gi"
-        memory_limit: "6Gi"
-      Course-CV:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
-        amd.com/gpu: "1"
-      Course-DL:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
-        amd.com/gpu: "1"
-      Course-LLM:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
-        amd.com/gpu: "1"
-      Course-PhySim:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
-        amd.com/gpu: "1"
-      none:
-        cpu: "2"
-        memory: "4Gi"
-        memory_limit: "6Gi"
-
-  # Team to resource mapping
-  teams:
-    mapping:
-      cpu:
-        - cpu
-      gpu:
-        - Course-CV
-        - Course-DL
-        - Course-LLM
-        - Course-PhySim
-      official:
-        - cpu
-        - Course-CV
-        - Course-DL
-        - Course-LLM
-        - Course-PhySim
-      AUP:
-        - Course-CV
-        - Course-DL
-        - Course-LLM
-        - Course-PhySim
-      native-users:
-        - Course-CV
-        - Course-DL
-        - Course-LLM
-
-  # User quota management system
-  # Quota controls container usage time (quota units consumed per minute)
-  quota:
-    # Enable/disable quota system (auto-disabled for auto-login/dummy modes if not set)
-    enabled: null  # null = auto-detect based on authMode
-
-    # CPU-only quota rate (when no accelerator selected)
-    cpuRate: 1
-
-    # Minimum quota required to start any container
-    minimumToStart: 10
-
-    # Default quota for new users (0 = no initial allocation, must be set by admin)
-    # When a new user first attempts to use the system, they will be automatically
-    # granted this amount of quota
-    defaultQuota: 0
-
-    # Auto-refresh rules: each rule generates a K8s CronJob
-    #
-    # Action modes:
-    #   add: Add amount to current balance (default). Use negative for deduction.
-    #   set: Set balance to exact amount
-    #
-    # Targets support flexible filtering:
-    #   includeUnlimited: bool - include unlimited users (default: false)
-    #   balanceBelow: int - only if balance < this value
-    #   balanceAbove: int - only if balance > this value
-    #   includeUsers: list - only these users
-    #   excludeUsers: list - exclude these users
-    #   usernamePattern: str - regex pattern for username matching
-    refreshRules: {}
-    # Example:
-    # refreshRules:
-    #   daily-topup:
-    #     enabled: true
-    #     schedule: "0 0 * * *"
-    #     action: add              # add (default) / set
-    #     amount: 100              # positive = add, negative = deduct
-    #     maxBalance: 500          # cap (for positive add)
-    #     minBalance: 0            # floor (for negative add)
-    #     targets:
-    #       includeUnlimited: false
-    #       balanceBelow: 400
-    #   monthly-reset:
-    #     enabled: true
-    #     schedule: "0 0 1 * *"
-    #     action: set              # set everyone to 500
-    #     amount: 500
-    #     targets:
-    #       includeUnlimited: false
-    #   weekly-decay:
-    #     enabled: false
-    #     schedule: "0 0 * * 0"
-    #     amount: -50              # negative = deduct 50 each week
-    #     minBalance: 0
-    #     targets:
-    #       balanceAbove: 100
+# Custom overrides (uncomment to customize)
+# custom:
+#   authMode: "github"  # auto-login | dummy | github | multi
+#   adminUser:
+#     enabled: true
+#   accelerators:
+#     my-gpu:
+#       displayName: "My Custom GPU"
+#       nodeSelector:
+#         node-type: my-gpu
+#       quotaRate: 2
+#   resources:
+#     images:
+#       my-course: "my-registry/my-image:latest"
+#     requirements:
+#       my-course:
+#         cpu: "4"
+#         memory: "16Gi"
+#   teams:
+#     mapping:
+#       my-team:
+#         - my-course
 
 # Use K3s built-in local-path storage (no NFS required)
 hub:
-  # Service account for quota refresh CronJob
-  services:
-    quota-refresh:
-      admin: true
-      # apiToken will be auto-generated by z2jh
-
   db:
     pvc:
       storageClassName: local-path
@@ -240,21 +76,6 @@ hub:
           <p>My location is on <code>runtime/values.yaml</code></p>
           <p>You can edit this via <strong>ConfigMap</strong> without rebuilding the image.</p>
           </div>
-
-  # Environment variables from secrets (for auto-admin feature)
-  extraEnv:
-    JUPYTERHUB_API_TOKEN:
-      valueFrom:
-        secretKeyRef:
-          name: jupyterhub-admin-credentials
-          key: api-token
-          optional: true
-    JUPYTERHUB_ADMIN_PASSWORD:
-      valueFrom:
-        secretKeyRef:
-          name: jupyterhub-admin-credentials
-          key: admin-password
-          optional: true
 
   config:
     # ---- Hub Core ----
