@@ -21,7 +21,7 @@
 # AUP Learning Cloud - Deployment Configuration
 #
 # Deploy with:
-#   helm install jupyterhub ./jupyterhub -n jupyterhub --create-namespace -f values.yaml
+#   helm install jupyterhub ./chart -n jupyterhub --create-namespace -f values.yaml
 #
 # This file contains environment-specific overrides.
 # See jupyterhub/values.yaml for all available options and defaults.

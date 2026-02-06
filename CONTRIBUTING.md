@@ -165,7 +165,7 @@ Teaching notebooks in `projects/` have relaxed lint rules:
 - Lambda assignments are acceptable (teaching patterns)
 
 Standard production code rules apply to:
-- `runtime/chart/files/hub/jupyterhub_config.py`
+- `runtime/hub/core/jupyterhub_config.py`
 - `scripts/`
 - All other Python files
 

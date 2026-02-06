@@ -163,7 +163,7 @@ kubectl get nodes --show-labels | grep node-type
 cd runtime
 
 # Deploy JupyterHub
-helm install jupyterhub ./jupyterhub \
+helm install jupyterhub ./chart \
   --namespace jupyterhub \
   --create-namespace \
   -f values.yaml
@@ -328,7 +328,7 @@ GitHubOAuthenticator:
     - read:org
 ```
 
-Update [jupyterhub_config.py](../runtime/chart/files/hub/jupyterhub_config.py) to map teams to resources:
+Update [jupyterhub_config.py](../runtime/hub/core/jupyterhub_config.py) to map teams to resources:
 
 ```python
 TEAM_RESOURCE_MAPPING = {
@@ -341,7 +341,7 @@ TEAM_RESOURCE_MAPPING = {
 
 ##### Option 3: Multi-Login (GitHub + Native)
 
-Set in [jupyterhub_config.py](../runtime/chart/files/hub/jupyterhub_config.py):
+Set in [jupyterhub_config.py](../runtime/hub/core/jupyterhub_config.py):
 
 ```python
 c.JupyterHub.authenticator_class = CustomMultiAuthenticator
@@ -354,7 +354,7 @@ c.JupyterHub.authenticator_class = CustomMultiAuthenticator
 ```bash
 cd runtime
 
-helm install jupyterhub ./jupyterhub \
+helm install jupyterhub ./chart \
   --namespace jupyterhub \
   --create-namespace \
   -f values-multi-nodes.yaml
@@ -380,7 +380,7 @@ helm install jupyterhub ./jupyterhub \
 cd runtime
 
 # Upgrade JupyterHub
-helm upgrade jupyterhub ./jupyterhub \
+helm upgrade jupyterhub ./chart \
   --namespace jupyterhub \
   -f values-multi-nodes.yaml
 ```

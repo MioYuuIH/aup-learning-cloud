@@ -48,10 +48,10 @@ The Helm chart uses a layered configuration approach:
 Deploy with:
 ```bash
 # Production
-helm upgrade jupyterhub ./jupyterhub -n jupyterhub -f values.yaml
+helm upgrade jupyterhub ./chart -n jupyterhub -f values.yaml
 
 # Local development
-helm upgrade jupyterhub ./jupyterhub -n jupyterhub -f values.yaml -f values.local.yaml
+helm upgrade jupyterhub ./chart -n jupyterhub -f values.yaml -f values.local.yaml
 ```
 
 ---
@@ -338,7 +338,7 @@ prePuller:
 After modifying configuration:
 
 ```bash
-helm upgrade jupyterhub ./jupyterhub -n jupyterhub -f values.yaml
+helm upgrade jupyterhub ./chart -n jupyterhub -f values.yaml
 ```
 
 Or use the helper script:
