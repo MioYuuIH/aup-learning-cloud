@@ -107,6 +107,9 @@ Includes 12 hands-on labs covering common deep learning concepts and techniques.
 - [**Large Language Model from Scratch**](projects/LLM) \
 Includes 9 hands-on labs designed to teach LLM development from scratch.
 
+- [**Physical Simulation**](projects/PhySim) \
+Includes 4 hands-on labs on building a virtual robotic arm and grasping objects.
+
 ## Key Features
 
 ### Hardware Acceleration
@@ -142,6 +145,7 @@ Current environments are set up as `RESOURCE_IMAGES` in `runtime/jupyterhub/file
 | CV COURSE   | `ghcr.io/amdresearch/auplc-cv`    | v1.0  | GPU (Strix-Halo) |
 | DL COURSE   | `ghcr.io/amdresearch/auplc-dl`    | v1.0  | GPU (Strix-Halo) |
 | LLM COURSE  | `ghcr.io/amdresearch/auplc-llm`   | v1.0  | GPU (Strix-Halo)                |
+| PhySim COURSE  | `ghcr.io/amdresearch/auplc-physim`   | v1.0  | GPU (Strix-Halo)                |
 
 ## Documentation
 
@@ -152,6 +156,20 @@ Current environments are set up as `RESOURCE_IMAGES` in `runtime/jupyterhub/file
 - [GitHub OAuth Setup](docs/jupyterhub/How_to_Setup_GitHub_OAuth.md) - OAuth configuration
 - [Maintenance Manual](docs/user-manual/aup-remote-lab-user-manual-admin-new.md) - Operations guide
 
+
 ## Contributing
 
 Please refer to [CONTRIBUTING.md](docs/contribute.md) for details on how to contribute to the project.
+
+## Acknowledgments and Credits
+
+AUP would like to thank the following universities and professors. This learning solution was made possible through the joint efforts of these partners.
+
+| University | Professors and Labs | Toolkits |
+|---|---|---|
+| National Taiwan University | [Prof. Chun-Yi Lee](https://www.csie.ntu.edu.tw/en/member/Faculty/Chun-Yi-Lee-67240464), [ELSA Lab](https://elsalab.ai/) | DL, CV |
+| Nanjing University | [Prof. Jingwei Xu](https://njudeepengine.github.io/jingweixu/), [NJUDeepEngine](https://github.com/NJUDeepEngine) | LLM |
+
+The following repositories are used in AUP Learning Cloud, either in close to original form or as an inspiration:
+
+* [Genesis](https://github.com/Genesis-Embodied-AI/Genesis)
