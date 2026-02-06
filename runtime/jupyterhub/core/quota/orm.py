@@ -40,15 +40,11 @@ class UserQuota(Base):
     __tablename__ = "quota_user_quota"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(
-        String(255), nullable=False, unique=True, index=True
-    )
+    username: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     unlimited: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=func.now())
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime, default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
 
 class QuotaTransaction(Base):
@@ -64,9 +60,7 @@ class QuotaTransaction(Base):
     description: Mapped[str | None] = mapped_column(Text)
     balance_before: Mapped[int] = mapped_column(Integer, nullable=False)
     balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime, default=func.now(), index=True
-    )
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=func.now(), index=True)
     created_by: Mapped[str | None] = mapped_column(String(255))
 
 

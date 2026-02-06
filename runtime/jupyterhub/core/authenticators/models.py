@@ -40,12 +40,8 @@ class UserPassword(Base):
     __tablename__ = "auth_user_passwords"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(
-        String(255), nullable=False, unique=True, index=True
-    )
+    username: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     password_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     force_change: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=func.now())
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime, default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=func.now(), onupdate=func.now())

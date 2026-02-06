@@ -67,10 +67,7 @@ def check_migration_needed() -> bool:
         return False
 
     # Skip if old database doesn't exist
-    if not os.path.exists(OLD_DB_PATH):
-        return False
-
-    return True
+    return os.path.exists(OLD_DB_PATH)
 
 
 def migrate_quota_data(target_db_url: str) -> dict:
@@ -113,9 +110,7 @@ def migrate_quota_data(target_db_url: str) -> dict:
         for row in old_cursor.fetchall():
             try:
                 # Check if user already exists in new table
-                existing = session.query(UserQuota).filter(
-                    UserQuota.username == row["username"]
-                ).first()
+                existing = session.query(UserQuota).filter(UserQuota.username == row["username"]).first()
 
                 if existing:
                     # Update existing record if old has higher balance

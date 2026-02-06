@@ -243,9 +243,7 @@ class HubConfig:
             RuntimeError: If HubConfig.init() has not been called
         """
         if not cls._initialized or cls._instance is None:
-            raise RuntimeError(
-                "HubConfig not initialized. Call HubConfig.init() in jupyterhub_config.py first."
-            )
+            raise RuntimeError("HubConfig not initialized. Call HubConfig.init() in jupyterhub_config.py first.")
         return cls._instance
 
     @classmethod
@@ -327,8 +325,7 @@ class HubConfig:
     def build_resource_requirements(self) -> dict[str, dict]:
         """Build resource requirements dict."""
         return {
-            k: v.model_dump(by_alias=True, exclude_none=True)
-            for k, v in self._config.resources.requirements.items()
+            k: v.model_dump(by_alias=True, exclude_none=True) for k, v in self._config.resources.requirements.items()
         }
 
     def build_node_selector_mapping(self) -> dict[str, dict[str, str]]:

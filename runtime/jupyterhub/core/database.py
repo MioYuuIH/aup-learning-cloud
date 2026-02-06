@@ -41,11 +41,11 @@ if TYPE_CHECKING:
 Base = declarative_base()
 
 # Global singleton instances
-_engine: "Engine | None" = None
-_SessionFactory: "sessionmaker[Session] | None" = None
+_engine: Engine | None = None
+_SessionFactory: sessionmaker[Session] | None = None
 
 
-def init_database(db_url: str) -> "Engine":
+def init_database(db_url: str) -> Engine:
     """
     Initialize the shared database connection.
 
@@ -67,14 +67,14 @@ def init_database(db_url: str) -> "Engine":
     return _engine
 
 
-def get_engine() -> "Engine":
+def get_engine() -> Engine:
     """Get the shared database engine."""
     if _engine is None:
         raise RuntimeError("Database not initialized. Call init_database first.")
     return _engine
 
 
-def get_session() -> "Session":
+def get_session() -> Session:
     """Get a new database session."""
     if _SessionFactory is None:
         raise RuntimeError("Database not initialized. Call init_database first.")

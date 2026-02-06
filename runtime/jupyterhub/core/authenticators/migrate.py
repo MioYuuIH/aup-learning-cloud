@@ -55,10 +55,7 @@ def check_migration_needed() -> bool:
 
     # Skip if old database doesn't exist
     # DBM files may have extensions like .db, .dir, .pag
-    dbm_exists = any(
-        os.path.exists(f"{OLD_PASSWORDS_DBM}{ext}")
-        for ext in ["", ".db", ".dir", ".pag", ".dat"]
-    )
+    dbm_exists = any(os.path.exists(f"{OLD_PASSWORDS_DBM}{ext}") for ext in ["", ".db", ".dir", ".pag", ".dat"])
 
     return dbm_exists
 
@@ -94,7 +91,7 @@ def migrate_auth_data(target_db_url: str) -> dict:
         force_change_users = set()
         try:
             with dbm.open(OLD_FORCE_CHANGE_DBM, "r") as db:
-                for key in db.keys():
+                for key in db:
                     username = key.decode("utf8") if isinstance(key, bytes) else key
                     force_change_users.add(username)
         except Exception as e:
@@ -104,15 +101,13 @@ def migrate_auth_data(target_db_url: str) -> dict:
         print("[AUTH MIGRATION] Migrating user passwords...")
         try:
             with dbm.open(OLD_PASSWORDS_DBM, "r") as db:
-                for key in db.keys():
+                for key in db:
                     try:
                         username = key.decode("utf8") if isinstance(key, bytes) else key
                         password_hash = db[key]
 
                         # Check if user already exists in new table
-                        existing = session.query(UserPassword).filter_by(
-                            username=username
-                        ).first()
+                        existing = session.query(UserPassword).filter_by(username=username).first()
 
                         if existing:
                             print(f"[AUTH MIGRATION] User {username} already exists, skipping")

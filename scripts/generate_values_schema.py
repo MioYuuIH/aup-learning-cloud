@@ -40,10 +40,7 @@ def remove_descriptions(obj, in_properties=False):
                 continue
             # When we enter 'properties', mark that we're inside it
             if k == "properties":
-                result[k] = {
-                    pk: remove_descriptions(pv, in_properties=False)
-                    for pk, pv in v.items()
-                }
+                result[k] = {pk: remove_descriptions(pv, in_properties=False) for pk, pv in v.items()}
             else:
                 result[k] = remove_descriptions(v, in_properties=False)
         return result
@@ -54,9 +51,7 @@ def remove_descriptions(obj, in_properties=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate values.schema.json from values.schema.yaml"
-    )
+    parser = argparse.ArgumentParser(description="Generate values.schema.json from values.schema.yaml")
     parser.add_argument(
         "--input",
         type=Path,
