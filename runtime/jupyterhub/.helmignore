@@ -29,3 +29,11 @@ values.schema.yaml
 .project
 .idea/
 *.tmproj
+
+# Large directories that should not be packaged
+node_modules/
+__pycache__/
+*.pyc
+frontend/admin-ui/src/
+frontend/admin-ui/node_modules/
+core/

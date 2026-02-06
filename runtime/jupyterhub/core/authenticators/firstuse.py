@@ -132,7 +132,7 @@ class CustomFirstUseAuthenticator(FirstUseAuthenticator):
         """Check if user already has a password set."""
         return self._get_user_password(username) is not None
 
-    async def authenticate(self, handler, data):
+    async def authenticate(self, _handler, data):
         """Authenticate user with username and password."""
         username = self.normalize_username(data.get("username", ""))
         password = data.get("password", "")

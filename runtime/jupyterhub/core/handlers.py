@@ -454,14 +454,15 @@ class QuotaAPIHandler(APIHandler):
                 new_balance = quota_manager.set_balance(username, req.amount, admin_name)
             elif req.action == QuotaAction.ADD:
                 assert req.amount is not None
-                new_balance = quota_manager.add_quota(username, req.amount, admin_name, req.description)
+                new_balance = quota_manager.add_quota(username, req.amount, req.description or "", admin_name)
             elif req.action == QuotaAction.DEDUCT:
                 assert req.amount is not None
-                success, new_balance = quota_manager.deduct_quota(username, req.amount, description=req.description)
-                if not success:
+                current_balance = quota_manager.get_balance(username)
+                if current_balance < req.amount:
                     self.set_status(400)
                     self.set_header("Content-Type", "application/json")
                     return self.finish(json.dumps({"error": "Insufficient balance"}))
+                new_balance = quota_manager.deduct_quota(username, req.amount, req.description or "")
             elif req.action == QuotaAction.SET_UNLIMITED:
                 assert req.unlimited is not None
                 quota_manager.set_unlimited(username, req.unlimited, admin_name)

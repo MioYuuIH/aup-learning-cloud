@@ -26,7 +26,10 @@ Uses the shared JupyterHub database with prefixed table names.
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text, func
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
 
@@ -36,12 +39,16 @@ class UserQuota(Base):
 
     __tablename__ = "quota_user_quota"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(255), nullable=False, unique=True, index=True)
-    balance = Column(Integer, nullable=False, default=0)
-    unlimited = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True, index=True
+    )
+    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unlimited: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )
 
 
 class QuotaTransaction(Base):
@@ -49,16 +56,18 @@ class QuotaTransaction(Base):
 
     __tablename__ = "quota_transactions"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(255), nullable=False, index=True)
-    amount = Column(Integer, nullable=False)
-    transaction_type = Column(String(50), nullable=False)
-    resource_type = Column(String(100))
-    description = Column(Text)
-    balance_before = Column(Integer, nullable=False)
-    balance_after = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=func.now(), index=True)
-    created_by = Column(String(255))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    transaction_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    resource_type: Mapped[str | None] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(Text)
+    balance_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=func.now(), index=True
+    )
+    created_by: Mapped[str | None] = mapped_column(String(255))
 
 
 class UsageSession(Base):
@@ -66,15 +75,15 @@ class UsageSession(Base):
 
     __tablename__ = "quota_usage_sessions"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(255), nullable=False, index=True)
-    resource_type = Column(String(100), nullable=False)
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime)
-    duration_minutes = Column(Integer)
-    quota_consumed = Column(Integer)
-    status = Column(String(20), default="active", index=True)
-    created_at = Column(DateTime, default=func.now())
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    start_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    end_time: Mapped[datetime | None] = mapped_column(DateTime)
+    duration_minutes: Mapped[int | None] = mapped_column(Integer)
+    quota_consumed: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str | None] = mapped_column(String(20), default="active", index=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=func.now())
 
 
 # Add composite index for status queries
