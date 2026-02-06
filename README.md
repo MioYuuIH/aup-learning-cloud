@@ -159,7 +159,7 @@ Current environments are set up as `RESOURCE_IMAGES` in `runtime/jupyterhub/file
 
 ## Contributing
 
-Please refer to [CONTRIBUTING.md](docs/contribute.md) for details on how to contribute to the project.
+Please refer to [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to the project.
 
 ## Acknowledgments and Credits
 
