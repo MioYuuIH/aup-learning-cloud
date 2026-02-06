@@ -34,6 +34,3 @@ values.schema.yaml
 node_modules/
 __pycache__/
 *.pyc
-frontend/admin-ui/src/
-frontend/admin-ui/node_modules/
-core/

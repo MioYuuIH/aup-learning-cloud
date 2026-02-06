@@ -34,13 +34,13 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
 
 # Copy package files
-COPY runtime/jupyterhub/frontend/admin-ui/package.json runtime/jupyterhub/frontend/admin-ui/pnpm-lock.yaml ./
+COPY runtime/hub/frontend/admin-ui/package.json runtime/hub/frontend/admin-ui/pnpm-lock.yaml ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
 # Copy source files
-COPY runtime/jupyterhub/frontend/admin-ui/ ./
+COPY runtime/hub/frontend/admin-ui/ ./
 
 # Build the React app
 RUN pnpm run build
@@ -60,7 +60,7 @@ RUN mkdir -p /tmp/custom_templates/static/css /tmp/custom_templates/static/js \
     /usr/local/share/jupyterhub/static/admin-ui
 
 # Copy template files with correct permissions
-COPY --chmod=644 runtime/jupyterhub/frontend/templates/ /tmp/custom_templates/
+COPY --chmod=644 runtime/hub/frontend/templates/ /tmp/custom_templates/
 
 # Copy admin-ui build output
 COPY --from=admin-ui-builder /app/dist/ /usr/local/share/jupyterhub/static/admin-ui/
@@ -69,7 +69,7 @@ COPY --from=admin-ui-builder /app/dist/ /usr/local/share/jupyterhub/static/admin
 RUN chown -R 1000:1000 /usr/local/share/jupyterhub/static/admin-ui/
 
 # Install Python packages with uv (10-100x faster than pip)
-COPY runtime/jupyterhub/requirements.txt /tmp/requirements.txt
+COPY runtime/hub/requirements.txt /tmp/requirements.txt
 RUN if [ -n "${PIP_INDEX_URL}" ]; then \
         uv pip install --system --index-url "${PIP_INDEX_URL}" -r /tmp/requirements.txt; \
     else \
@@ -77,7 +77,7 @@ RUN if [ -n "${PIP_INDEX_URL}" ]; then \
     fi
 
 # Copy core business logic package
-COPY runtime/jupyterhub/core/ /usr/local/lib/core/
+COPY runtime/hub/core/ /usr/local/lib/core/
 
 # Ensure correct permissions for core (755 for dirs, 644 for files)
 RUN chown -R 1000:1000 /usr/local/lib/core/ && \
