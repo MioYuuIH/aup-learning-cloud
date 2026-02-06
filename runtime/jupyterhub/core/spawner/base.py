@@ -31,13 +31,16 @@ import os
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
-from jupyterhub.spawner import Spawner
 
 if TYPE_CHECKING:
+    import logging
+
+    from jupyterhub.user import User
+
     from core.config import HubConfig
 
 
-class RemoteLabSpawnerMixin(Spawner):
+class RemoteLabSpawnerMixin:
     """
     Mixin class providing common RemoteLab spawner functionality.
 
@@ -49,6 +52,11 @@ class RemoteLabSpawnerMixin(Spawner):
 
     Subclasses should implement platform-specific methods.
     """
+
+    # Type hints for attributes from Spawner base class (available at runtime via MRO)
+    if TYPE_CHECKING:
+        user: User
+        log: logging.Logger
 
     # Configuration injection (set by factory)
     _hub_config: HubConfig | None = None

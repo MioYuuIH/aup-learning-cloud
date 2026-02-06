@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 # =============================================================================
 
 JUPYTERHUB_CONFIG_DIR = "/usr/local/etc/jupyterhub"
-YAML_CONFIG_DIR = os.path.join(JUPYTERHUB_CONFIG_DIR, "hub-config")
+YAML_CONFIG_DIR = "/tmp/hub-config"
 
 
 def _setup_yaml_config_dir() -> str | None:

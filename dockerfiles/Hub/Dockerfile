@@ -34,13 +34,13 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
 
 # Copy package files
-COPY admin-ui/package.json admin-ui/pnpm-lock.yaml ./
+COPY runtime/jupyterhub/frontend/admin-ui/package.json runtime/jupyterhub/frontend/admin-ui/pnpm-lock.yaml ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
 # Copy source files
-COPY admin-ui/ ./
+COPY runtime/jupyterhub/frontend/admin-ui/ ./
 
 # Build the React app
 RUN pnpm run build
@@ -59,7 +59,7 @@ RUN mkdir -p /tmp/custom_templates/static/js
 RUN mkdir -p /usr/local/share/jupyterhub/static/admin-ui
 
 # Copy template files with correct permissions
-COPY --chmod=644 templates/ /tmp/custom_templates/
+COPY --chmod=644 runtime/jupyterhub/hub-templates/ /tmp/custom_templates/
 
 # Copy admin-ui build output
 COPY --from=admin-ui-builder /app/dist/ /usr/local/share/jupyterhub/static/admin-ui/
@@ -75,13 +75,15 @@ RUN if [ -n "${PIP_INDEX_URL}" ]; then \
     fi
 
 # Copy core business logic package
-COPY --chmod=644 runtime/jupyterhub/core/ /usr/local/lib/core/
+COPY runtime/jupyterhub/core/ /usr/local/lib/core/
 
-# Ensure correct permissions for core
-RUN chown -R 1000:1000 /usr/local/lib/core/
+# Ensure correct permissions for core (755 for dirs, 644 for files)
+RUN chown -R 1000:1000 /usr/local/lib/core/ && \
+    find /usr/local/lib/core/ -type d -exec chmod 755 {} \; && \
+    find /usr/local/lib/core/ -type f -exec chmod 644 {} \;
 
 # Add core to Python path
-ENV PYTHONPATH="/usr/local/lib:${PYTHONPATH}"
+ENV PYTHONPATH="/usr/local/lib"
 
 # Switch back to jovyan user
 USER jovyan
