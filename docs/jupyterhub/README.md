@@ -36,7 +36,7 @@ The Helm chart uses a layered configuration approach:
 
 | File | Purpose |
 |------|---------|
-| `runtime/jupyterhub/values.yaml` | Chart defaults (accelerators, resources, teams, quota settings) |
+| `runtime/chart/values.yaml` | Chart defaults (accelerators, resources, teams, quota settings) |
 | `runtime/values.yaml` | Deployment overrides (environment-specific settings) |
 | `runtime/values.local.yaml` | Local development overrides (gitignored) |
 
@@ -58,7 +58,7 @@ helm upgrade jupyterhub ./jupyterhub -n jupyterhub -f values.yaml -f values.loca
 
 ## Custom Configuration
 
-All custom settings are under the `custom` section. Chart defaults are in `runtime/jupyterhub/values.yaml`.
+All custom settings are under the `custom` section. Chart defaults are in `runtime/chart/values.yaml`.
 
 ### Authentication Mode
 

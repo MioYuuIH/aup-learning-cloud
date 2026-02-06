@@ -56,7 +56,7 @@ def main():
         "--input",
         type=Path,
         default=Path(__file__).parent.parent / "runtime" / "jupyterhub" / "values.schema.yaml",
-        help="Path to values.schema.yaml (default: runtime/jupyterhub/values.schema.yaml)",
+        help="Path to values.schema.yaml (default: runtime/chart/values.schema.yaml)",
     )
     parser.add_argument(
         "--output",

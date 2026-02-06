@@ -116,7 +116,7 @@ This describes some workflows for AUP Learning Cloud.
 6. Run `build.bash` to build and push to ghcr. Make sure you do have the permission to push to ghcr.
 7. Add the new image to `runtime/values.yaml` as prepuller.
 8. Add the new image to `dockerfile/Hub/templates/resource_options_form.html` for front page settings.
-9. Add the new image in `runtime/jupyterhub/files/hub/jupyterhub_config.py`. Include `RESOURCE_IMAGES`, `RESOURCE_REQUIREMENTS` and `TEAM_RESOURCE_MAPPING`.
+9. Add the new image in `runtime/chart/files/hub/jupyterhub_config.py`. Include `RESOURCE_IMAGES`, `RESOURCE_REQUIREMENTS` and `TEAM_RESOURCE_MAPPING`.
 10. Run `scripts/helm_update.bash` and wait. For new images, it may take up 3 hours for prepuller depending on the cluster network. You can inspect the status by `k9s` command. If there is any node halt, you can manually delete to restart the prepuller pods. If there is still halts, you can `ssh` into the node and `sudo systemctl restart k3s-server` to restart the k3s server.
 11. If it takes too long, and causing `pending-upgraded` failure. You should list out past versions of the image by `helm history jupyterhub -n jupyterhub` . Then you can rollback to a previous version by `helm rollback jupyterhub <version> -n jupyterhub`. After the rollback, you can run `scripts/helm_update.bash` again.
 
@@ -129,7 +129,7 @@ This describes some workflows for AUP Learning Cloud.
 If there is any problem, refer to `step10~11` in `Workflow 2`.
 
 ## Workflow 4: edit resource-limitation of an existing image (backend and frontend)
-1. Edit `runtime/jupyterhub/files/hub/jupyterhub_config.py`. Especially `RESOURCE_REQUIREMENTS` and `TEAM_RESOURCE_MAPPING`.
+1. Edit `runtime/chart/files/hub/jupyterhub_config.py`. Especially `RESOURCE_REQUIREMENTS` and `TEAM_RESOURCE_MAPPING`.
 2. If you hope to change user permissions for a image, you can edit `TEAM_RESOURCE_MAPPING`. For localAccount users, you can edit `RemoteLabKubeSpawner::get_user_teams`.
 3. If you hope to change ths information on webpage, you can edit `resource_options_form.py::RESOURCE_SPECS`.
 4. If you made changes to webpage, you should rebuild the hub image and push to ghcr. The update image version in `values.yaml`.
@@ -137,10 +137,10 @@ If there is any problem, refer to `step10~11` in `Workflow 2`.
 
 ## Workflow 5: change login settings (methods, account, password, localAccount...)
 
-1. You can change the login method in `runtime/jupyterhub/files/hub/jupyterhub_config.py`, with `c.JupyterHub.authenticator_class = CustomMultiAuthenticator`.
+1. You can change the login method in `runtime/chart/files/hub/jupyterhub_config.py`, with `c.JupyterHub.authenticator_class = CustomMultiAuthenticator`.
 2. To config GitHub OAuth, you should refer to this [post](https://jupyterhub.readthedocs.io/en/latest/howto/configuration/config-ghoauth.html). The main configs are in `runtime/values.yaml`.
-3. To config localAccount, you should refer to `SimpleGroupAuthenticator`. The main configs are in `runtime/jupyterhub/files/hub/jupyterhub_config.py`. All users within one group shares the same password. 
-4. To temporary ban login methods for testing cases, you can edit `runtime/jupyterhub/files/hub/jupyterhub_config.py`, to set`c.JupyterHub.authenticator_class = "dummy"`. Thus any passwd and username will be accepted.
+3. To config localAccount, you should refer to `SimpleGroupAuthenticator`. The main configs are in `runtime/chart/files/hub/jupyterhub_config.py`. All users within one group shares the same password. 
+4. To temporary ban login methods for testing cases, you can edit `runtime/chart/files/hub/jupyterhub_config.py`, to set`c.JupyterHub.authenticator_class = "dummy"`. Thus any passwd and username will be accepted.
 5. Run `scripts/helm_update.bash` and wait.
 
 ## Workflow 6: change announcement on login page

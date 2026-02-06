@@ -62,7 +62,7 @@ ignore = [
     "F401",   # Imported but unused (conditional imports in notebooks)
 ]
 
-"runtime/jupyterhub/**/*.py" = [
+"runtime/chart/**/*.py" = [
     "E402",   # Module level import not at top of file (common in notebooks)
     "F821",   # Undefined name (get_config is a JupyterHub magic function)
 ]

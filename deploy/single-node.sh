@@ -252,7 +252,7 @@ function deploy_rocm_gpu_device_plugin() {
 function deply_aup_learning_cloud_runtime() {
     echo "Deploying AUP Learning Cloud Runtime..."
 
-    helm install jupyterhub ../runtime/jupyterhub  --namespace jupyterhub   --create-namespace   -f ../runtime/values.yaml
+    helm install jupyterhub ../runtime/chart  --namespace jupyterhub   --create-namespace   -f ../runtime/values.yaml
 
     echo "Waiting for JupyterHub deployments to be ready..."
     kubectl wait --namespace jupyterhub \
@@ -264,7 +264,7 @@ function deply_aup_learning_cloud_runtime() {
 }
 
 function upgrade_aup_learning_cloud_runtime() {
-    helm upgrade jupyterhub ../runtime/jupyterhub  --namespace jupyterhub   --create-namespace   -f ../runtime/values.yaml
+    helm upgrade jupyterhub ../runtime/chart  --namespace jupyterhub   --create-namespace   -f ../runtime/values.yaml
 }
 
 function remove_aup_learning_cloud_runtime() {

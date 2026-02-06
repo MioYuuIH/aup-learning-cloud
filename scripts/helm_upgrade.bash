@@ -18,4 +18,4 @@
 # SOFTWARE.
 
 
-helm upgrade jupyterhub runtime/jupyterhub -n jupyterhub --values runtime/values.yaml 
+helm upgrade jupyterhub runtime/chart -n jupyterhub --values runtime/values.yaml 

@@ -29,12 +29,12 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^runtime/jupyterhub/templates/
+        exclude: ^runtime/chart/templates/
       - id: end-of-file-fixer
-        exclude: ^runtime/jupyterhub/templates/
+        exclude: ^runtime/chart/templates/
       - id: check-yaml
         args: [--unsafe]
-        exclude: ^runtime/jupyterhub/templates/
+        exclude: ^runtime/chart/templates/
       - id: check-added-large-files
         args: [--maxkb=1000]
       - id: check-merge-conflict

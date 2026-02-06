@@ -328,7 +328,7 @@ GitHubOAuthenticator:
     - read:org
 ```
 
-Update [jupyterhub_config.py](../runtime/jupyterhub/files/hub/jupyterhub_config.py) to map teams to resources:
+Update [jupyterhub_config.py](../runtime/chart/files/hub/jupyterhub_config.py) to map teams to resources:
 
 ```python
 TEAM_RESOURCE_MAPPING = {
@@ -341,7 +341,7 @@ TEAM_RESOURCE_MAPPING = {
 
 ##### Option 3: Multi-Login (GitHub + Native)
 
-Set in [jupyterhub_config.py](../runtime/jupyterhub/files/hub/jupyterhub_config.py):
+Set in [jupyterhub_config.py](../runtime/chart/files/hub/jupyterhub_config.py):
 
 ```python
 c.JupyterHub.authenticator_class = CustomMultiAuthenticator
