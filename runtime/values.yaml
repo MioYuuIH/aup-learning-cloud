@@ -84,6 +84,71 @@ custom:
       env: {}
       quotaRate: 1
 
+  # Resource images and requirements
+  resources:
+    images:
+      cpu: "ghcr.io/amdresearch/auplc-default:latest"
+      Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
+      Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
+      Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
+      Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
+
+    requirements:
+      cpu:
+        cpu: "2"
+        memory: "4Gi"
+        memory_limit: "6Gi"
+      Course-CV:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-DL:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-LLM:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-PhySim:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      none:
+        cpu: "2"
+        memory: "4Gi"
+        memory_limit: "6Gi"
+
+  # Team to resource mapping
+  teams:
+    mapping:
+      cpu:
+        - cpu
+      gpu:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      official:
+        - cpu
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      AUP:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      native-users:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+
   # User quota management system
   # Quota controls container usage time (quota units consumed per minute)
   quota:
@@ -158,51 +223,11 @@ hub:
     tag: latest
     pullPolicy: IfNotPresent
 
-  extraConfig:
-    01-api-token: |
-      import os
-      api_token = os.environ.get('JUPYTERHUB_API_TOKEN')
-      if api_token:
-          c.JupyterHub.api_tokens = {api_token: "admin"}
-          print("✅ API token loaded for admin user")
-
-    02-templates-and-static: |
-      import os
-      template_path = os.environ.get('JUPYTERHUB_TEMPLATE_PATH', '/tmp/custom_templates')
-      c.JupyterHub.template_paths = [template_path]
-
-    03-auto-create-admin: |
-      import os
-      import dbm
-      import bcrypt
-
-      admin_password = os.environ.get('JUPYTERHUB_ADMIN_PASSWORD', '')
-      admin_username = 'admin'
-
-      # Set admin user
-      if admin_password:
-          c.Authenticator.admin_users = {admin_username}
-          print(f"✅ Admin user configured: {admin_username}")
-
-          passwords_dbm = '/srv/jupyterhub/passwords.dbm'
-          try:
-              with dbm.open(passwords_dbm, 'r') as db:
-                  if admin_username in db:
-                      print(f"✅ Admin '{admin_username}' password already set")
-                      admin_password = None
-          except:
-              pass
-
-          if admin_password:
-              with dbm.open(passwords_dbm, 'c', 0o600) as db:
-                  db[admin_username] = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
-              print(f"✅ Admin '{admin_username}' password set automatically")
-
-    04-hide-logout-for-autologin: |
-      # Hide logout button in auto-login mode
-      if AUTH_MODE == "auto-login":
-          c.JupyterHub.template_vars = {"hide_logout": True}
-          print("[INFO] Auto-login mode: logout button hidden")
+  # Additional Python config snippets (executed after core/setup.py)
+  # Example:
+  #   myconfig: |
+  #     c.JupyterHub.some_setting = "value"
+  extraConfig: {}
 
   extraFiles:
     announcement.txt:

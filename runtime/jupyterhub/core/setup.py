@@ -25,6 +25,9 @@ It reads configuration from the HubConfig singleton and configures:
 - Authenticator
 - Spawner
 - HTTP Handlers
+- API tokens
+- Template paths
+- Admin user auto-creation
 
 Usage in jupyterhub_config.py:
     from core.config import HubConfig
@@ -36,7 +39,10 @@ Usage in jupyterhub_config.py:
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
+
+import bcrypt
 
 if TYPE_CHECKING:
     pass
@@ -62,6 +68,7 @@ def setup_hub(c: Any) -> None:
         create_authenticator,
     )
     from core.config import HubConfig
+    from core.database import create_all_tables, init_database
     from core.handlers import configure_handlers, get_handlers
     from core.spawner import RemoteLabKubeSpawner
 
@@ -143,21 +150,112 @@ def setup_hub(c: Any) -> None:
         c.JupyterHub.extra_handlers.append((route, handler))
 
     # =========================================================================
-    # Quota Session Cleanup
+    # Determine Database URL
+    # =========================================================================
+
+    from core import z2jh
+
+    db_type = z2jh.get_config("hub.db.type", "sqlite-pvc")
+    if db_type == "sqlite-pvc":
+        db_url = "sqlite:////srv/jupyterhub/jupyterhub.sqlite"
+    elif db_type == "sqlite-memory":
+        db_url = "sqlite://"
+    else:
+        # PostgreSQL or MySQL - get URL from config
+        db_url = z2jh.get_config("hub.db.url", "sqlite:////srv/jupyterhub/jupyterhub.sqlite")
+
+    # =========================================================================
+    # Initialize Shared Database
+    # =========================================================================
+
+    init_database(db_url)
+
+    create_all_tables()
+
+    # =========================================================================
+    # Run Auth Migration
+    # =========================================================================
+
+    try:
+        from core.authenticators.migrate import check_migration_needed as auth_migration_needed
+        from core.authenticators.migrate import migrate_auth_data
+
+        if auth_migration_needed():
+            print("[AUTH] Migrating data from old DBM files...")
+            migrate_auth_data(db_url)
+
+    except Exception as e:
+        print(f"[AUTH] Warning: Failed to run auth migration: {e}")
+
+    # =========================================================================
+    # Initialize Quota Manager
     # =========================================================================
 
     if config.quota_enabled:
         try:
-            from core.quota import get_quota_manager
+            from core.quota import init_quota_manager
+            from core.quota.migrate import check_migration_needed, migrate_quota_data
 
-            quota_manager = get_quota_manager()
+            # Check and run migration from old quota.sqlite if needed
+            if check_migration_needed():
+                print("[QUOTA] Migrating data from old quota.sqlite...")
+                migrate_quota_data(db_url)
+
+            quota_manager = init_quota_manager()
             stale_sessions = quota_manager.cleanup_stale_sessions()
             if stale_sessions:
                 print(f"[QUOTA] Cleaned up {len(stale_sessions)} stale sessions on startup")
             active_count = quota_manager.get_active_sessions_count()
             print(f"[QUOTA] {active_count} active sessions found")
         except Exception as e:
-            print(f"[QUOTA] Warning: Failed to cleanup stale sessions: {e}")
+            print(f"[QUOTA] Warning: Failed to initialize quota manager: {e}")
+
+    # =========================================================================
+    # API Token
+    # =========================================================================
+
+    api_token = os.environ.get("JUPYTERHUB_API_TOKEN")
+    if api_token:
+        c.JupyterHub.api_tokens = {api_token: "admin"}
+        print("[SETUP] API token loaded for admin user")
+
+    # =========================================================================
+    # Template Paths
+    # =========================================================================
+
+    template_path = os.environ.get("JUPYTERHUB_TEMPLATE_PATH", "/tmp/custom_templates")
+    c.JupyterHub.template_paths = [template_path]
+
+    # =========================================================================
+    # Auto-Create Admin User
+    # =========================================================================
+
+    admin_password = os.environ.get("JUPYTERHUB_ADMIN_PASSWORD", "")
+    admin_username = "admin"
+
+    if admin_password:
+        c.Authenticator.admin_users = {admin_username}
+        print(f"[SETUP] Admin user configured: {admin_username}")
+
+        try:
+            from core.authenticators.models import UserPassword
+            from core.database import session_scope
+
+            with session_scope() as session:
+                user_pw = session.query(UserPassword).filter_by(username=admin_username).first()
+                if user_pw:
+                    print(f"[SETUP] Admin '{admin_username}' password already set")
+                else:
+                    password_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
+                    user_pw = UserPassword(
+                        username=admin_username,
+                        password_hash=password_hash,
+                        force_change=False,
+                    )
+                    session.add(user_pw)
+                    print(f"[SETUP] Admin '{admin_username}' password set automatically")
+        except Exception as e:
+            print(f"[SETUP] Warning: Failed to set admin password: {e}")
 
     # =========================================================================
     # Template Vars

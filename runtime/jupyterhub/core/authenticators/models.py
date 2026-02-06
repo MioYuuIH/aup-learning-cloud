@@ -18,36 +18,27 @@
 # SOFTWARE.
 
 """
-Quota Management Package
+Authenticator SQLAlchemy Models
 
-Provides quota management functionality for JupyterHub users,
-including balance tracking, usage sessions, and admin operations.
+Database models for storing user passwords and authentication state.
+Uses the shared JupyterHub database with prefixed table names.
 """
 
-from core.quota.manager import QuotaManager, get_quota_manager, init_quota_manager
-from core.quota.models import (
-    BatchQuotaRequest,
-    BatchQuotaUser,
-    QuotaAction,
-    QuotaModifyRequest,
-    QuotaRefreshAction,
-    QuotaRefreshRequest,
-    QuotaRefreshTargets,
-    ValidationError,
-)
+from __future__ import annotations
 
-__all__ = [
-    # Manager
-    "QuotaManager",
-    "get_quota_manager",
-    "init_quota_manager",
-    # Models
-    "QuotaAction",
-    "QuotaRefreshAction",
-    "QuotaModifyRequest",
-    "BatchQuotaUser",
-    "BatchQuotaRequest",
-    "QuotaRefreshTargets",
-    "QuotaRefreshRequest",
-    "ValidationError",
-]
+from sqlalchemy import Boolean, Column, DateTime, Integer, LargeBinary, String, func
+
+from core.database import Base
+
+
+class UserPassword(Base):
+    """User password storage table."""
+
+    __tablename__ = "auth_user_passwords"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(LargeBinary, nullable=False)
+    force_change = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

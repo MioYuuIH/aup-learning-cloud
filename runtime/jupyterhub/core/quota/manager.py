@@ -19,114 +19,68 @@
 
 """
 Quota Manager Module for JupyterHub
+
 Manages user quota balances and usage tracking for container time limits.
+Uses the shared database module for SQLAlchemy support.
 """
 
 from __future__ import annotations
 
 import re
-import sqlite3
 import threading
-from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from core.database import get_session, session_scope
+from core.quota.orm import QuotaTransaction, UsageSession, UserQuota
+
+# Re-export models for backwards compatibility
+__all__ = [
+    "UserQuota",
+    "QuotaTransaction",
+    "UsageSession",
+    "QuotaManager",
+    "init_quota_manager",
+    "get_quota_manager",
+]
 
 
 class QuotaManager:
-    """Thread-safe quota management for JupyterHub users."""
+    """
+    Thread-safe quota management for JupyterHub users.
 
-    def __init__(self, db_path: str = "/srv/jupyterhub/quota.sqlite"):
-        self.db_path = db_path
-        self._lock = threading.Lock()
-        self._init_db()
+    Uses the shared database module for database abstraction.
+    """
 
-    @contextmanager
-    def _get_connection(self):
-        """Get a database connection with context management."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
+    _instance: QuotaManager | None = None
+    _lock = threading.Lock()
 
-    def _init_db(self):
-        """Initialize the database schema if not exists."""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.executescript(
-                """
-                -- User quota balances
-                CREATE TABLE IF NOT EXISTS user_quota (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT NOT NULL UNIQUE,
-                    balance INTEGER NOT NULL DEFAULT 0,
-                    unlimited INTEGER NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
+    def __new__(cls, *args, **kwargs):
+        """Ensure singleton instance."""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
 
-                -- Quota transaction audit log
-                CREATE TABLE IF NOT EXISTS quota_transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT NOT NULL,
-                    amount INTEGER NOT NULL,
-                    transaction_type TEXT NOT NULL,
-                    resource_type TEXT,
-                    description TEXT,
-                    balance_before INTEGER NOT NULL,
-                    balance_after INTEGER NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    created_by TEXT
-                );
+    def __init__(self):
+        """Initialize the QuotaManager."""
+        if self._initialized:
+            return
 
-                -- Usage session tracking
-                CREATE TABLE IF NOT EXISTS usage_sessions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT NOT NULL,
-                    resource_type TEXT NOT NULL,
-                    start_time TIMESTAMP NOT NULL,
-                    end_time TIMESTAMP,
-                    duration_minutes INTEGER,
-                    quota_consumed INTEGER,
-                    status TEXT DEFAULT 'active',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                -- Indexes for performance
-                CREATE INDEX IF NOT EXISTS idx_user_quota_username
-                    ON user_quota(username);
-                CREATE INDEX IF NOT EXISTS idx_quota_transactions_username
-                    ON quota_transactions(username);
-                CREATE INDEX IF NOT EXISTS idx_quota_transactions_created_at
-                    ON quota_transactions(created_at);
-                CREATE INDEX IF NOT EXISTS idx_usage_sessions_username
-                    ON usage_sessions(username);
-                CREATE INDEX IF NOT EXISTS idx_usage_sessions_status
-                    ON usage_sessions(status);
-            """
-            )
-            conn.commit()
-            # Run migrations for existing databases
-            self._migrate_db(conn)
-
-    def _migrate_db(self, conn):
-        """Run database migrations for schema updates."""
-        cursor = conn.cursor()
-        # Check if 'unlimited' column exists in user_quota
-        cursor.execute("PRAGMA table_info(user_quota)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "unlimited" not in columns:
-            cursor.execute("ALTER TABLE user_quota ADD COLUMN unlimited INTEGER NOT NULL DEFAULT 0")
-            conn.commit()
+        self._op_lock = threading.Lock()
+        self._initialized = True
+        print("[QUOTA] QuotaManager initialized")
 
     def get_balance(self, username: str) -> int:
         """Get user's current quota balance."""
         username = username.lower()
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT balance FROM user_quota WHERE username = ?", (username,))
-            row = cursor.fetchone()
-            return row["balance"] if row else 0
+        session = get_session()
+        try:
+            user = session.query(UserQuota).filter(UserQuota.username == username).first()
+            return user.balance if user else 0
+        finally:
+            session.close()
 
     def ensure_user_quota(self, username: str, default_quota: int = 0) -> int:
         """
@@ -134,462 +88,294 @@ class QuotaManager:
         grant the default quota amount. Returns the user's current balance.
         """
         username = username.lower()
-        with self._lock, self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT balance FROM user_quota WHERE username = ?", (username,))
-            row = cursor.fetchone()
+        with session_scope() as session:
+            user = session.query(UserQuota).filter(UserQuota.username == username).first()
+            if user:
+                return user.balance
 
-            if row:
-                # User already exists
-                return row["balance"]
+            user = UserQuota(username=username, balance=default_quota)
+            session.add(user)
 
-            # New user - grant default quota if configured
             if default_quota > 0:
-                cursor.execute(
-                    """
-                    INSERT INTO user_quota (username, balance)
-                    VALUES (?, ?)
-                """,
-                    (username, default_quota),
+                transaction = QuotaTransaction(
+                    username=username,
+                    amount=default_quota,
+                    transaction_type="initial_grant",
+                    balance_before=0,
+                    balance_after=default_quota,
+                    description="Default quota for new user",
                 )
-                cursor.execute(
-                    """
-                    INSERT INTO quota_transactions
-                    (username, amount, transaction_type, balance_before, balance_after, description)
-                    VALUES (?, ?, 'initial_grant', 0, ?, ?)
-                """,
-                    (username, default_quota, default_quota, f"Initial quota grant: {default_quota}"),
-                )
-                conn.commit()
-                print(f"[QUOTA] New user '{username}' granted default quota: {default_quota}")
-                return default_quota
+                session.add(transaction)
 
-            # No default quota configured
-            return 0
+            return default_quota
 
-    def set_balance(self, username: str, amount: int, admin: str | None = None) -> int:
-        """Set user's quota balance to a specific amount."""
+    def is_unlimited(self, username: str) -> bool:
+        """Check if user has unlimited quota."""
         username = username.lower()
-        with self._lock, self._get_connection() as conn:
-            cursor = conn.cursor()
-            # Query balance directly within same connection to avoid race condition
-            cursor.execute("SELECT balance FROM user_quota WHERE username = ?", (username,))
-            row = cursor.fetchone()
-            current = row["balance"] if row else 0
+        session = get_session()
+        try:
+            user = session.query(UserQuota).filter(UserQuota.username == username).first()
+            return user.unlimited if user else False
+        finally:
+            session.close()
 
-            cursor.execute(
-                """
-                INSERT INTO user_quota (username, balance)
-                VALUES (?, ?)
-                ON CONFLICT(username) DO UPDATE SET
-                    balance = excluded.balance,
-                    updated_at = CURRENT_TIMESTAMP
-            """,
-                (username, amount),
+    # Alias for backwards compatibility
+    is_unlimited_in_db = is_unlimited
+
+    def set_unlimited(self, username: str, unlimited: bool = True, admin: str | None = None) -> None:
+        """Set unlimited quota flag for user."""
+        username = username.lower()
+        with session_scope() as session:
+            user = session.query(UserQuota).filter(UserQuota.username == username).first()
+            if not user:
+                user = UserQuota(username=username, balance=0, unlimited=unlimited)
+                session.add(user)
+            else:
+                user.unlimited = unlimited
+
+            transaction = QuotaTransaction(
+                username=username,
+                amount=0,
+                transaction_type="set_unlimited" if unlimited else "unset_unlimited",
+                balance_before=user.balance,
+                balance_after=user.balance,
+                description=f"Unlimited {'enabled' if unlimited else 'disabled'}",
+                created_by=admin,
             )
+            session.add(transaction)
 
-            # Record transaction
-            cursor.execute(
-                """
-                INSERT INTO quota_transactions
-                (username, amount, transaction_type, balance_before,
-                 balance_after, created_by, description)
-                VALUES (?, ?, 'admin_set', ?, ?, ?, ?)
-            """,
-                (username, amount - current, current, amount, admin, f"Balance set to {amount}"),
-            )
-
-            conn.commit()
-            return amount
-
-    def add_quota(self, username: str, amount: int, admin: str | None = None, description: str | None = None) -> int:
+    def add_quota(self, username: str, amount: int, description: str = "", admin: str | None = None) -> int:
         """Add quota to user's balance."""
         username = username.lower()
-        with self._lock, self._get_connection() as conn:
-            cursor = conn.cursor()
-            # Query balance directly within same connection to avoid race condition
-            cursor.execute("SELECT balance FROM user_quota WHERE username = ?", (username,))
-            row = cursor.fetchone()
-            current = row["balance"] if row else 0
-            new_balance = current + amount
+        with self._op_lock, session_scope() as session:
+            user = session.query(UserQuota).filter(UserQuota.username == username).first()
+            if not user:
+                user = UserQuota(username=username, balance=0)
+                session.add(user)
+                session.flush()
 
-            cursor.execute(
-                """
-                INSERT INTO user_quota (username, balance)
-                VALUES (?, ?)
-                ON CONFLICT(username) DO UPDATE SET
-                    balance = user_quota.balance + ?,
-                    updated_at = CURRENT_TIMESTAMP
-            """,
-                (username, amount, amount),
+            balance_before = user.balance
+            user.balance = balance_before + amount
+            balance_after = user.balance
+
+            transaction = QuotaTransaction(
+                username=username,
+                amount=amount,
+                transaction_type="add" if amount >= 0 else "deduct",
+                balance_before=balance_before,
+                balance_after=balance_after,
+                description=description or f"{'Added' if amount >= 0 else 'Deducted'} {abs(amount)} quota",
+                created_by=admin,
             )
+            session.add(transaction)
 
-            cursor.execute(
-                """
-                INSERT INTO quota_transactions
-                (username, amount, transaction_type, balance_before,
-                 balance_after, created_by, description)
-                VALUES (?, ?, 'admin_add', ?, ?, ?, ?)
-            """,
-                (username, amount, current, new_balance, admin, description or f"Added {amount} quota"),
+            return balance_after
+
+    def set_balance(self, username: str, new_balance: int, admin: str | None = None) -> int:
+        """Set user's quota balance to a specific value."""
+        username = username.lower()
+        with self._op_lock, session_scope() as session:
+            user = session.query(UserQuota).filter(UserQuota.username == username).first()
+            if not user:
+                user = UserQuota(username=username, balance=new_balance)
+                session.add(user)
+                balance_before = 0
+            else:
+                balance_before = user.balance
+                user.balance = new_balance
+
+            transaction = QuotaTransaction(
+                username=username,
+                amount=new_balance - balance_before,
+                transaction_type="set",
+                balance_before=balance_before,
+                balance_after=new_balance,
+                description=f"Balance set to {new_balance}",
+                created_by=admin,
             )
+            session.add(transaction)
 
-            conn.commit()
             return new_balance
 
-    def deduct_quota(
-        self, username: str, amount: int, resource_type: str | None = None, description: str | None = None
-    ) -> tuple[bool, int]:
-        """
-        Deduct quota from user's balance for usage.
-        Returns (success, new_balance).
-        """
+    def deduct_quota(self, username: str, amount: int, resource_type: str = "") -> int:
+        """Deduct quota from user's balance."""
         username = username.lower()
-        with self._lock, self._get_connection() as conn:
-            cursor = conn.cursor()
-            # Query balance directly within same connection to avoid race condition
-            cursor.execute("SELECT balance FROM user_quota WHERE username = ?", (username,))
-            row = cursor.fetchone()
-            current = row["balance"] if row else 0
+        with self._op_lock, session_scope() as session:
+            user = session.query(UserQuota).filter(UserQuota.username == username).first()
+            if not user:
+                return 0
 
-            if current < amount:
-                return False, current
+            if user.unlimited:
+                return user.balance
 
-            new_balance = current - amount
+            balance_before = user.balance
+            user.balance = max(0, balance_before - amount)
+            balance_after = user.balance
 
-            cursor.execute(
-                """
-                UPDATE user_quota
-                SET balance = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE username = ?
-            """,
-                (new_balance, username),
+            transaction = QuotaTransaction(
+                username=username,
+                amount=-amount,
+                transaction_type="usage",
+                resource_type=resource_type,
+                balance_before=balance_before,
+                balance_after=balance_after,
+                description=f"Usage: {resource_type}" if resource_type else "Usage deduction",
             )
+            session.add(transaction)
 
-            cursor.execute(
-                """
-                INSERT INTO quota_transactions
-                (username, amount, transaction_type, resource_type,
-                 balance_before, balance_after, description)
-                VALUES (?, ?, 'usage', ?, ?, ?, ?)
-            """,
-                (
-                    username,
-                    -amount,
-                    resource_type,
-                    current,
-                    new_balance,
-                    description or f"Usage deduction for {resource_type}",
-                ),
-            )
+            return balance_after
 
-            conn.commit()
-            return True, new_balance
-
-    def is_unlimited_in_db(self, username: str) -> bool:
-        """Check if user is marked as unlimited in the database."""
+    def start_session(self, username: str, resource_type: str) -> int:
+        """Start a usage session and return session ID."""
         username = username.lower()
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT unlimited FROM user_quota WHERE username = ?", (username,))
-            row = cursor.fetchone()
-            return bool(row and row["unlimited"])
-
-    def set_unlimited(self, username: str, unlimited: bool, admin: str | None = None) -> bool:
-        """Set user's unlimited quota status in the database."""
-        username = username.lower()
-        with self._lock, self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO user_quota (username, balance, unlimited)
-                VALUES (?, 0, ?)
-                ON CONFLICT(username) DO UPDATE SET
-                    unlimited = excluded.unlimited,
-                    updated_at = CURRENT_TIMESTAMP
-            """,
-                (username, 1 if unlimited else 0),
+        with session_scope() as session:
+            usage_session = UsageSession(
+                username=username,
+                resource_type=resource_type,
+                start_time=datetime.now(),
+                status="active",
             )
+            session.add(usage_session)
+            session.flush()
+            return usage_session.id
 
-            # Record transaction
-            action = "granted" if unlimited else "revoked"
-            cursor.execute(
-                """
-                INSERT INTO quota_transactions
-                (username, amount, transaction_type, balance_before,
-                 balance_after, created_by, description)
-                VALUES (?, 0, 'unlimited_change', 0, 0, ?, ?)
-            """,
-                (username, admin, f"Unlimited quota {action}"),
-            )
+    def end_session(self, session_id: int, quota_consumed: int = 0) -> dict | None:
+        """End a usage session."""
+        with session_scope() as session:
+            usage_session = session.query(UsageSession).filter(UsageSession.id == session_id).first()
+            if not usage_session or usage_session.status != "active":
+                return None
 
-            conn.commit()
-            return unlimited
+            end_time = datetime.now()
+            duration = (end_time - usage_session.start_time).total_seconds() / 60
 
-    def has_unlimited_quota(self, username: str) -> bool:
-        """
-        Check if user has unlimited quota.
-        Only checks the database - unlimited status is managed via admin UI.
-        """
-        return self.is_unlimited_in_db(username)
+            usage_session.end_time = end_time
+            usage_session.duration_minutes = int(duration)
+            usage_session.quota_consumed = quota_consumed
+            usage_session.status = "completed"
 
-    def can_start_container(
-        self,
-        username: str,
-        resource_type: str,
-        duration_minutes: int,
-        quota_rates: dict,
-        default_quota: int = 0,
-    ) -> tuple[bool, str, int]:
-        """
-        Check if user has sufficient quota to start a container.
-        Returns (can_start, message, estimated_cost).
-        """
-        username = username.lower()
-        rate = quota_rates.get(resource_type, 1)
-        estimated_cost = rate * duration_minutes
-
-        # Ensure user has a quota record (grant default if new user)
-        balance = self.ensure_user_quota(username, default_quota)
-
-        # Check for unlimited quota
-        if self.has_unlimited_quota(username):
-            return True, "Unlimited quota", 0
-
-        if balance < estimated_cost:
-            return (
-                False,
-                f"Insufficient quota. Required: {estimated_cost}, Available: {balance}",
-                estimated_cost,
-            )
-
-        return True, "Sufficient quota available", estimated_cost
-
-    def start_usage_session(self, username: str, resource_type: str) -> int:
-        """Start a new usage session and return session ID."""
-        username = username.lower()
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO usage_sessions
-                (username, resource_type, start_time, status)
-                VALUES (?, ?, CURRENT_TIMESTAMP, 'active')
-            """,
-                (username, resource_type),
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
-
-    def end_usage_session(self, session_id: int, quota_rates: dict) -> tuple[int, int]:
-        """
-        End a usage session and deduct quota.
-        Returns (duration_minutes, quota_consumed).
-        """
-        with self._lock, self._get_connection() as conn:
-            cursor = conn.cursor()
-
-            # Get session details
-            cursor.execute(
-                """
-                SELECT username, resource_type, start_time
-                FROM usage_sessions WHERE id = ? AND status = 'active'
-            """,
-                (session_id,),
-            )
-            session = cursor.fetchone()
-
-            if not session:
-                return 0, 0
-
-            username = session["username"]
-            resource_type = session["resource_type"]
-
-            # Calculate duration
-            start_time = datetime.fromisoformat(session["start_time"])
-            duration = (datetime.now() - start_time).total_seconds() / 60
-            duration_minutes = max(1, int(duration))  # Minimum 1 minute
-
-            # Calculate quota consumed
-            rate = quota_rates.get(resource_type, 1)
-            quota_consumed = rate * duration_minutes
-
-            # Update session status atomically (only if still active)
-            cursor.execute(
-                """
-                UPDATE usage_sessions
-                SET end_time = CURRENT_TIMESTAMP,
-                    duration_minutes = ?,
-                    quota_consumed = ?,
-                    status = 'completed'
-                WHERE id = ? AND status = 'active'
-            """,
-                (duration_minutes, quota_consumed, session_id),
-            )
-
-            # Check if session was actually updated (guard against race conditions)
-            if cursor.rowcount == 0:
-                return 0, 0
-
-            # Inline quota deduction (avoid nested locking)
-            cursor.execute("SELECT balance FROM user_quota WHERE username = ?", (username,))
-            row = cursor.fetchone()
-            current_balance = row["balance"] if row else 0
-            new_balance = max(0, current_balance - quota_consumed)
-
-            cursor.execute(
-                """
-                UPDATE user_quota
-                SET balance = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE username = ?
-            """,
-                (new_balance, username),
-            )
-
-            # Record transaction
-            cursor.execute(
-                """
-                INSERT INTO quota_transactions
-                (username, amount, transaction_type, resource_type,
-                 balance_before, balance_after, description)
-                VALUES (?, ?, 'usage', ?, ?, ?, ?)
-            """,
-                (
-                    username,
-                    -quota_consumed,
-                    resource_type,
-                    current_balance,
-                    new_balance,
-                    f"Session {session_id}: {duration_minutes} minutes",
-                ),
-            )
-
-            conn.commit()
-            return duration_minutes, quota_consumed
+            return {
+                "session_id": usage_session.id,
+                "username": usage_session.username,
+                "resource_type": usage_session.resource_type,
+                "duration_minutes": int(duration),
+                "quota_consumed": quota_consumed,
+            }
 
     def get_active_session(self, username: str) -> dict | None:
         """Get user's active session if any."""
         username = username.lower()
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT id, resource_type, start_time
-                FROM usage_sessions
-                WHERE username = ? AND status = 'active'
-                ORDER BY start_time DESC
-                LIMIT 1
-            """,
-                (username,),
+        session = get_session()
+        try:
+            usage_session = (
+                session.query(UsageSession)
+                .filter(UsageSession.username == username, UsageSession.status == "active")
+                .first()
             )
-            row = cursor.fetchone()
-            return dict(row) if row else None
+            if not usage_session:
+                return None
+
+            return {
+                "session_id": usage_session.id,
+                "username": usage_session.username,
+                "resource_type": usage_session.resource_type,
+                "start_time": usage_session.start_time.isoformat(),
+            }
+        finally:
+            session.close()
 
     def cleanup_stale_sessions(self, max_duration_minutes: int = 480) -> list[dict]:
-        """
-        Clean up stale sessions that have been active too long.
-        This handles cases where containers crashed or Hub restarted.
-
-        Args:
-            max_duration_minutes: Maximum session duration before considered stale (default 8 hours)
-
-        Returns:
-            List of cleaned up sessions with deducted quota
-        """
+        """Clean up stale sessions older than max duration."""
+        cutoff_time = datetime.now() - timedelta(minutes=max_duration_minutes)
         cleaned = []
-        with self._lock, self._get_connection() as conn:
-            cursor = conn.cursor()
 
-            # Find stale active sessions
-            cursor.execute(
-                """
-                SELECT id, username, resource_type, start_time
-                FROM usage_sessions
-                WHERE status = 'active'
-                AND datetime(start_time, '+' || ? || ' minutes') < datetime('now')
-            """,
-                (max_duration_minutes,),
+        with self._op_lock, session_scope() as session:
+            stale_sessions = (
+                session.query(UsageSession)
+                .filter(UsageSession.status == "active", UsageSession.start_time < cutoff_time)
+                .all()
             )
-            stale_sessions = cursor.fetchall()
 
-            for session in stale_sessions:
-                session_id = session["id"]
-                username = session["username"]
-                resource_type = session["resource_type"]
-                start_time = datetime.fromisoformat(session["start_time"])
+            for usage_session in stale_sessions:
+                duration = (cutoff_time - usage_session.start_time).total_seconds() / 60
+                if duration < max_duration_minutes:
+                    continue
 
-                # Calculate duration (cap at max_duration_minutes)
-                duration = (datetime.now() - start_time).total_seconds() / 60
                 duration_minutes = min(int(duration), max_duration_minutes)
 
-                # Mark session as cleaned up
-                cursor.execute(
-                    """
-                    UPDATE usage_sessions
-                    SET end_time = CURRENT_TIMESTAMP,
-                        duration_minutes = ?,
-                        status = 'cleaned_up'
-                    WHERE id = ?
-                """,
-                    (duration_minutes, session_id),
-                )
+                usage_session.end_time = cutoff_time
+                usage_session.duration_minutes = duration_minutes
+                usage_session.status = "cleaned_up"
 
                 cleaned.append(
                     {
-                        "session_id": session_id,
-                        "username": username,
-                        "resource_type": resource_type,
+                        "session_id": usage_session.id,
+                        "username": usage_session.username,
+                        "resource_type": usage_session.resource_type,
                         "duration_minutes": duration_minutes,
                     }
                 )
 
-                print(f"[QUOTA] Cleaned up stale session {session_id} for {username}: {duration_minutes} min")
-
-            conn.commit()
-
-        # Note: We don't deduct quota for cleaned up sessions to avoid double charging.
-        # The session was likely interrupted abnormally.
-        # If you want to charge for stale sessions, uncomment and modify the deduct_quota
-        # call inside the loop above.
+                print(
+                    f"[QUOTA] Cleaned up stale session {usage_session.id} for {usage_session.username}: {duration_minutes} min"
+                )
 
         return cleaned
 
     def get_active_sessions_count(self) -> int:
         """Get count of currently active sessions."""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) as count FROM usage_sessions WHERE status = 'active'")
-            row = cursor.fetchone()
-            return row["count"] if row else 0
+        session = get_session()
+        try:
+            return session.query(UsageSession).filter(UsageSession.status == "active").count()
+        finally:
+            session.close()
 
     def get_user_transactions(self, username: str, limit: int = 50) -> list[dict]:
         """Get user's transaction history."""
         username = username.lower()
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT * FROM quota_transactions
-                WHERE username = ?
-                ORDER BY created_at DESC
-                LIMIT ?
-            """,
-                (username, limit),
+        session = get_session()
+        try:
+            transactions = (
+                session.query(QuotaTransaction)
+                .filter(QuotaTransaction.username == username)
+                .order_by(QuotaTransaction.created_at.desc())
+                .limit(limit)
+                .all()
             )
-            return [dict(row) for row in cursor.fetchall()]
+            return [
+                {
+                    "id": t.id,
+                    "username": t.username,
+                    "amount": t.amount,
+                    "transaction_type": t.transaction_type,
+                    "resource_type": t.resource_type,
+                    "description": t.description,
+                    "balance_before": t.balance_before,
+                    "balance_after": t.balance_after,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                    "created_by": t.created_by,
+                }
+                for t in transactions
+            ]
+        finally:
+            session.close()
 
     def get_all_balances(self) -> list[dict]:
         """Get all user balances for admin."""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT username, balance, unlimited, updated_at
-                FROM user_quota
-                ORDER BY username
-            """
-            )
-            return [dict(row) for row in cursor.fetchall()]
+        session = get_session()
+        try:
+            users = session.query(UserQuota).order_by(UserQuota.username).all()
+            return [
+                {
+                    "username": u.username,
+                    "balance": u.balance,
+                    "unlimited": u.unlimited,
+                    "updated_at": u.updated_at.isoformat() if u.updated_at else None,
+                }
+                for u in users
+            ]
+        finally:
+            session.close()
 
     def batch_set_quota(self, users: list[tuple[str, int]], admin: str | None = None) -> dict:
         """Set quota for multiple users at once."""
@@ -604,30 +390,22 @@ class QuotaManager:
         return results
 
     def _match_targets(self, username: str, balance: int, is_unlimited: bool, targets: dict) -> bool:
-        """
-        Check if user matches the target criteria.
-        All conditions are AND-ed together.
-        """
-        # includeUnlimited: include unlimited users (default: false)
+        """Check if user matches the target criteria."""
         if is_unlimited and not targets.get("includeUnlimited", False):
             return False
 
-        # balanceBelow: only if balance < this value
         balance_below = targets.get("balanceBelow")
         if balance_below is not None and balance >= balance_below:
             return False
 
-        # balanceAbove: only if balance > this value
         balance_above = targets.get("balanceAbove")
         if balance_above is not None and balance <= balance_above:
             return False
 
-        # includeUsers: only these users (empty = no restriction)
         include_users = targets.get("includeUsers", [])
         if include_users and username not in [u.lower() for u in include_users]:
             return False
 
-        # excludeUsers: exclude these users
         exclude_users = targets.get("excludeUsers", [])
         if username in [u.lower() for u in exclude_users]:
             return False
@@ -651,60 +429,33 @@ class QuotaManager:
         targets: dict | None = None,
         rule_name: str = "manual",
     ) -> dict:
-        """
-        Batch refresh quota for users with flexible targeting and action modes.
-
-        Args:
-            amount: Quota amount (positive = add, negative = deduct for "add" action)
-            action: Operation mode - "add" (default) or "set"
-            max_balance: Maximum balance cap for positive add (None = no cap)
-            min_balance: Minimum balance floor for negative add (None = 0)
-            targets: Targeting criteria dict with keys:
-                - includeUnlimited: bool (default False)
-                - balanceBelow: int (only if balance < this)
-                - balanceAbove: int (only if balance > this)
-                - includeUsers: list[str] (only these users)
-                - excludeUsers: list[str] (exclude these users)
-                - usernamePattern: str (regex pattern)
-            rule_name: Name of the refresh rule (for logging)
-
-        Returns:
-            {"users_updated": N, "total_change": M, "skipped": K, "action": str, "rule_name": str}
-        """
+        """Batch refresh quota for users with flexible targeting."""
         if targets is None:
             targets = {}
         if min_balance is None:
             min_balance = 0
 
-        # Validate action
         if action not in ("add", "set"):
-            return {"error": f"Invalid action: {action}. Use 'add' or 'set'.", "rule_name": rule_name}
+            return {"error": f"Invalid action: {action}", "rule_name": rule_name}
 
-        with self._lock, self._get_connection() as conn:
-            cursor = conn.cursor()
-
-            # Get all users with quota records
-            cursor.execute("SELECT username, balance, unlimited FROM user_quota")
-            users = cursor.fetchall()
+        with self._op_lock, session_scope() as session:
+            users = session.query(UserQuota).all()
 
             users_updated = 0
             total_change = 0
             skipped = 0
 
             for user in users:
-                username = user["username"]
-                current = user["balance"]
-                is_unlimited = bool(user["unlimited"])
+                username = user.username
+                current = user.balance
+                is_unlimited = user.unlimited
 
-                # Check if user matches target criteria
                 if not self._match_targets(username, current, is_unlimited, targets):
                     skipped += 1
                     continue
 
-                # Calculate new balance based on action
                 if action == "add":
                     new_balance = current + amount
-                    # Apply cap/floor based on direction
                     if amount > 0 and max_balance is not None:
                         new_balance = min(new_balance, max_balance)
                     elif amount < 0:
@@ -715,33 +466,26 @@ class QuotaManager:
                     skipped += 1
                     continue
 
-                # Skip if no change
                 if new_balance == current:
                     skipped += 1
                     continue
 
                 change = new_balance - current
+                user.balance = new_balance
 
-                # Update balance
-                cursor.execute(
-                    "UPDATE user_quota SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE username = ?",
-                    (new_balance, username),
+                transaction = QuotaTransaction(
+                    username=username,
+                    amount=change,
+                    transaction_type="auto_refresh",
+                    balance_before=current,
+                    balance_after=new_balance,
+                    description=f"Auto {action}: {rule_name}",
                 )
-
-                # Record transaction with rule name and action
-                cursor.execute(
-                    """
-                    INSERT INTO quota_transactions
-                    (username, amount, transaction_type, balance_before, balance_after, description)
-                    VALUES (?, ?, 'auto_refresh', ?, ?, ?)
-                    """,
-                    (username, change, current, new_balance, f"Auto {action}: {rule_name}"),
-                )
+                session.add(transaction)
 
                 users_updated += 1
                 total_change += change
 
-            conn.commit()
             print(
                 f"[QUOTA] Refresh '{rule_name}' ({action}): {users_updated} users updated, {skipped} skipped, change={total_change:+d}"
             )
@@ -754,13 +498,33 @@ class QuotaManager:
             }
 
 
-# Global instance
+# =============================================================================
+# Global Instance
+# =============================================================================
+
 _quota_manager: QuotaManager | None = None
+_init_lock = threading.Lock()
+
+
+def init_quota_manager() -> QuotaManager:
+    """
+    Initialize the global QuotaManager instance.
+
+    Should be called once during JupyterHub startup after database is initialized.
+    """
+    global _quota_manager
+    with _init_lock:
+        if _quota_manager is None:
+            _quota_manager = QuotaManager()
+        return _quota_manager
 
 
 def get_quota_manager() -> QuotaManager:
-    """Get the global QuotaManager instance."""
-    global _quota_manager
+    """
+    Get the global QuotaManager instance.
+
+    Raises RuntimeError if not initialized.
+    """
     if _quota_manager is None:
-        _quota_manager = QuotaManager()
+        raise RuntimeError("QuotaManager not initialized. Call init_quota_manager() first.")
     return _quota_manager

@@ -15,16 +15,12 @@ data:
   {{- include "jupyterhub.name-templates" . | nindent 2 }}
 
   {{- /*
-    YAML configuration files from config/
-    These are stored with a "config__" prefix to distinguish them.
-    core/jupyterhub_config.py will extract them to hub-config/ subdirectory.
-
-    Note: Python files are in the Docker image under /usr/local/lib/core/.
+    Hub configuration from values.yaml custom section.
+    This is the single source of truth for business configuration.
+    Python reads this via yaml.load() instead of z2jh.
   */}}
-  {{- range $path, $_ := .Files.Glob "config/*.yaml" }}
-  config__{{ base $path }}: |
-{{ $.Files.Get $path | indent 4 }}
-  {{- end }}
+  hub-config.yaml: |
+{{ toYaml .Values.custom | indent 4 }}
 
   {{- /*
     Store away a checksum of the hook-image-puller daemonset so future upgrades

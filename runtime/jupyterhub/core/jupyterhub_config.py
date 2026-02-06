@@ -21,11 +21,7 @@
 JupyterHub Configuration - Main Entry Point
 
 This file is installed in the Docker image and loaded by JupyterHub.
-It reads runtime configuration from:
-1. Helm values (via z2jh from mounted secrets)
-2. YAML config files (from ConfigMap)
-
-No configuration logic in ConfigMap - everything is in the image.
+All configuration is read from Helm values.yaml via z2jh.
 """
 
 from __future__ import annotations
@@ -33,7 +29,6 @@ from __future__ import annotations
 import glob
 import os
 import re
-import shutil
 from typing import TYPE_CHECKING, Any
 
 from kubernetes_asyncio import client
@@ -48,76 +43,14 @@ if TYPE_CHECKING:
 
     def get_config() -> Config: ...
 
-
-# =============================================================================
-# Setup Config Directory
-# =============================================================================
-
-JUPYTERHUB_CONFIG_DIR = "/usr/local/etc/jupyterhub"
-YAML_CONFIG_DIR = "/tmp/hub-config"
-
-
-def _setup_yaml_config_dir() -> str | None:
-    """
-    Extract YAML config files from ConfigMap-mounted directory.
-
-    In Kubernetes, ConfigMap files are mounted with "config__" prefix.
-    This extracts them to a proper directory structure.
-    """
-    config_mount_dir = os.path.join(JUPYTERHUB_CONFIG_DIR, "config")
-
-    if not os.path.isdir(config_mount_dir):
-        return None
-
-    os.makedirs(YAML_CONFIG_DIR, exist_ok=True)
-
-    for filename in os.listdir(config_mount_dir):
-        if filename.startswith("config__") and filename.endswith((".yaml", ".yml")):
-            real_name = filename.replace("config__", "", 1)
-            src_path = os.path.join(config_mount_dir, filename)
-            dst_path = os.path.join(YAML_CONFIG_DIR, real_name)
-
-            try:
-                shutil.copy2(src_path, dst_path)
-                print(f"[CONFIG] Extracted {filename} -> hub-config/{real_name}")
-            except Exception as e:
-                print(f"[CONFIG] Warning: Failed to extract {filename}: {e}")
-
-    return YAML_CONFIG_DIR if os.path.isdir(YAML_CONFIG_DIR) else None
-
-
-yaml_config_dir = _setup_yaml_config_dir()
-
 # =============================================================================
 # Initialize HubConfig Singleton
 # =============================================================================
 
-# Read runtime settings from Helm values.yaml
-AUTH_MODE = z2jh.get_config("custom.authMode", "auto-login")
-SINGLE_NODE_MODE = os.environ.get("SINGLE_NODE_MODE", "").lower() == "true" or AUTH_MODE == "auto-login"
-GITHUB_ORG_NAME = z2jh.get_config("custom.githubOrgName", "")
+# Load configuration from mounted YAML file (generated from values.yaml custom section)
+HUB_CONFIG_PATH = "/usr/local/etc/jupyterhub/config/hub-config.yaml"
 
-# Read quota settings
-_quota_enabled = z2jh.get_config("custom.quota.enabled", None)
-_quota_cpu_rate = z2jh.get_config("custom.quota.cpuRate", None)
-_quota_minimum = z2jh.get_config("custom.quota.minimumToStart", None)
-_quota_default = z2jh.get_config("custom.quota.defaultQuota", None)
-
-# Read accelerators override
-_accelerators_override = z2jh.get_config_dict("custom.accelerators", None)
-
-# Initialize the singleton
-HubConfig.init(
-    auth_mode=AUTH_MODE,
-    single_node_mode=SINGLE_NODE_MODE,
-    github_org_name=GITHUB_ORG_NAME,
-    quota_enabled=_quota_enabled,
-    quota_cpu_rate=int(_quota_cpu_rate) if _quota_cpu_rate else None,
-    quota_minimum_to_start=int(_quota_minimum) if _quota_minimum else None,
-    quota_default=int(_quota_default) if _quota_default else None,
-    config_dir=yaml_config_dir,
-    accelerators_override=_accelerators_override,
-)
+HubConfig.init(config_path=HUB_CONFIG_PATH)
 
 # =============================================================================
 # Setup Business Logic
