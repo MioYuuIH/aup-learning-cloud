@@ -7,6 +7,7 @@ metadata:
 data:
   {{- /*
     Resource names exposed to reliably reference them.
+    These are used by core to resolve Kubernetes resource names.
 
     user-scheduler: "my-helm-release-user-scheduler"
     ...
@@ -14,14 +15,16 @@ data:
   {{- include "jupyterhub.name-templates" . | nindent 2 }}
 
   {{- /*
-    Glob files to allow them to be mounted by the hub pod
+    YAML configuration files from config/
+    These are stored with a "config__" prefix to distinguish them.
+    core/jupyterhub_config.py will extract them to hub-config/ subdirectory.
 
-    jupyterhub_config: |
-      multi line string content...
-    z2jh.py: |
-      multi line string content...
+    Note: Python files are in the Docker image under /usr/local/lib/core/.
   */}}
-  {{- (.Files.Glob "files/hub/*").AsConfig | nindent 2 }}
+  {{- range $path, $_ := .Files.Glob "config/*.yaml" }}
+  config__{{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+  {{- end }}
 
   {{- /*
     Store away a checksum of the hook-image-puller daemonset so future upgrades

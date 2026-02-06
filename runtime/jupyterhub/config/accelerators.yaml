@@ -1,0 +1,43 @@
+# Accelerator Configuration
+# Defines GPU/NPU accelerator options with node selectors, environment variables, and quota rates.
+
+phx:
+  displayName: "AMD Radeon 780M (Phoenix Point iGPU)"
+  description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
+  nodeSelector:
+    node-type: phx
+  env:
+    HSA_OVERRIDE_GFX_VERSION: "11.0.0"
+  quotaRate: 2
+
+strix:
+  displayName: "AMD Radeon 890M (Strix Point iGPU)"
+  description: "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X"
+  nodeSelector:
+    node-type: strix
+  env: {}
+  quotaRate: 2
+
+strix-halo:
+  displayName: "AMD Radeon 8060S (Strix Halo iGPU)"
+  description: "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X"
+  nodeSelector:
+    node-type: strix-halo
+  env: {}
+  quotaRate: 3
+
+dgpu:
+  displayName: "AMD Radeon 9070XT (Desktop GPU)"
+  description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6"
+  nodeSelector:
+    node-type: dgpu
+  env: {}
+  quotaRate: 4
+
+strix-npu:
+  displayName: "AMD XDNA2 (Strix Point NPU)"
+  description: "AMD XDNA2 NPU with AI acceleration"
+  nodeSelector:
+    type: strix
+  env: {}
+  quotaRate: 1

@@ -25,21 +25,26 @@ Utility methods for use in jupyterhub_config.py and dynamic subconfigs.
 Methods here can be imported by extraConfig in values.yaml
 """
 
+from __future__ import annotations
+
 import os
 from collections.abc import Mapping
 from functools import lru_cache
+from typing import Any, TypeVar
 
 import yaml
+
+T = TypeVar("T")
 
 
 # memorize so we only load config once
 @lru_cache
-def _load_config():
+def _load_config() -> dict[str, Any]:
     """Load the Helm chart configuration used to render the Helm templates of
     the chart from a mounted k8s Secret, and merge in values from an optionally
     mounted secret (hub.existingSecret)."""
 
-    cfg = {}
+    cfg: dict[str, Any] = {}
     for source in ("secret/values.yaml", "existing-secret/values.yaml"):
         path = f"/usr/local/etc/jupyterhub/{source}"
         if os.path.exists(path):
@@ -53,7 +58,7 @@ def _load_config():
 
 
 @lru_cache
-def _get_config_value(key):
+def _get_config_value(key: str) -> str:
     """Load value from the k8s ConfigMap given a key."""
 
     path = f"/usr/local/etc/jupyterhub/config/{key}"
@@ -65,7 +70,7 @@ def _get_config_value(key):
 
 
 @lru_cache
-def get_secret_value(key, default="never-explicitly-set"):
+def get_secret_value(key: str, default: str | None = "never-explicitly-set") -> str | None:
     """Load value from the user managed k8s Secret or the default k8s Secret
     given a key."""
 
@@ -79,12 +84,12 @@ def get_secret_value(key, default="never-explicitly-set"):
     raise Exception(f"{key} not found in either k8s Secret!")
 
 
-def get_name(name):
+def get_name(name: str) -> str:
     """Returns the fullname of a resource given its short name"""
     return _get_config_value(name)
 
 
-def get_name_env(name, suffix=""):
+def get_name_env(name: str, suffix: str = "") -> str:
     """Returns the fullname of a resource given its short name along with a
     suffix, converted to uppercase with dashes replaced with underscores. This
     is useful to reference named services associated environment variables, such
@@ -94,7 +99,7 @@ def get_name_env(name, suffix=""):
     return os.environ[env_key]
 
 
-def _merge_dictionaries(a, b):
+def _merge_dictionaries(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     """Merge two dictionaries recursively.
 
     Simplified From https://stackoverflow.com/a/7205107
@@ -111,7 +116,7 @@ def _merge_dictionaries(a, b):
     return merged
 
 
-def get_config(key, default=None):
+def get_config(key: str, default: T | None = None) -> T | Any:
     """
     Find a config item of a given name & return it
 
@@ -119,7 +124,7 @@ def get_config(key, default=None):
 
     get_config("a.b.c") returns config['a']['b']['c']
     """
-    value = _load_config()
+    value: Any = _load_config()
     # resolve path in yaml
     for level in key.split("."):
         if not isinstance(value, dict):
@@ -133,7 +138,19 @@ def get_config(key, default=None):
     return value
 
 
-def set_config_if_not_none(cparent, name, key):
+def get_config_list(key: str, default: list[Any] | None = None) -> list[Any]:
+    """Get list configuration value."""
+    result = get_config(key, default)
+    return result if isinstance(result, list) else (default or [])
+
+
+def get_config_dict(key: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Get dict configuration value."""
+    result = get_config(key, default)
+    return result if isinstance(result, dict) else (default or {})
+
+
+def set_config_if_not_none(cparent: Any, name: str, key: str) -> None:
     """
     Find a config item of a given name, set the corresponding Jupyter
     configuration item if not None

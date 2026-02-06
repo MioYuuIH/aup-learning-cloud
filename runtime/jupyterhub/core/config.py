@@ -1,0 +1,398 @@
+# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+"""
+Configuration Module for core
+
+Provides a singleton HubConfig that aggregates:
+1. Runtime settings from values.yaml (via z2jh)
+2. Static configuration from YAML files
+
+Usage:
+    # In jupyterhub_config.py (ConfigMap):
+    from core.config import HubConfig
+    HubConfig.init(
+        auth_mode="multi",
+        single_node_mode=False,
+        github_org_name="MyOrg",
+        config_dir="/usr/local/etc/jupyterhub/config",
+    )
+
+    # In business logic (Docker image):
+    from core.config import HubConfig
+    config = HubConfig.get()
+    if config.auth_mode == "multi":
+        ...
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import yaml
+from pydantic import BaseModel, Field
+
+# =============================================================================
+# YAML Configuration Models
+# =============================================================================
+
+
+class ResourceRequirements(BaseModel):
+    """Resource requirements for a container."""
+
+    cpu: str = "2"
+    memory: str = "4Gi"
+    memory_limit: str | None = None
+    gpu: str | None = Field(default=None, alias="amd.com/gpu")
+    npu: str | None = Field(default=None, alias="amd.com/npu")
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class AcceleratorConfig(BaseModel):
+    """Configuration for a single accelerator type."""
+
+    displayName: str
+    description: str = ""
+    nodeSelector: dict[str, str] = Field(default_factory=dict)
+    env: dict[str, str] = Field(default_factory=dict)
+    quotaRate: int = 1
+
+    model_config = {"extra": "allow"}
+
+
+class QuotaSettings(BaseModel):
+    """Quota system configuration."""
+
+    enabled: bool = True
+    cpuRate: int = 1
+    minimumToStart: int = 10
+    defaultQuota: int = 0
+
+    model_config = {"extra": "allow"}
+
+
+class ResourcesConfig(BaseModel):
+    """Resources configuration (images and requirements)."""
+
+    images: dict[str, str] = Field(default_factory=dict)
+    requirements: dict[str, ResourceRequirements] = Field(default_factory=dict)
+
+    model_config = {"extra": "allow"}
+
+
+class TeamsConfig(BaseModel):
+    """Team to resource mapping configuration."""
+
+    mapping: dict[str, list[str]] = Field(default_factory=dict)
+
+    model_config = {"extra": "allow"}
+
+
+class YamlConfig(BaseModel):
+    """
+    Configuration loaded from YAML files.
+
+    Each YAML file's name becomes a top-level key:
+    - resources.yaml -> yaml_config.resources
+    - accelerators.yaml -> yaml_config.accelerators
+    """
+
+    resources: ResourcesConfig = Field(default_factory=ResourcesConfig)
+    accelerators: dict[str, AcceleratorConfig] = Field(default_factory=dict)
+    teams: TeamsConfig = Field(default_factory=TeamsConfig)
+    quota: QuotaSettings = Field(default_factory=QuotaSettings)
+
+    model_config = {"extra": "allow"}
+
+    @classmethod
+    def from_yaml_dir(cls, config_dir: str | Path) -> YamlConfig:
+        """Load configuration from a directory of YAML files."""
+        config_dir = Path(config_dir)
+        raw_config: dict[str, Any] = {}
+
+        if not config_dir.exists():
+            print(f"[CONFIG] Directory not found: {config_dir}")
+            return cls()
+
+        for yaml_file in sorted(config_dir.glob("*.yaml")):
+            key = yaml_file.stem
+            try:
+                with open(yaml_file, encoding="utf-8") as f:
+                    content = yaml.safe_load(f)
+                    if content is not None:
+                        raw_config[key] = content
+                        print(f"[CONFIG] Loaded {yaml_file.name}")
+            except yaml.YAMLError as e:
+                print(f"[CONFIG] Error loading {yaml_file.name}: {e}")
+                raise
+
+        for yml_file in sorted(config_dir.glob("*.yml")):
+            key = yml_file.stem
+            if key not in raw_config:
+                try:
+                    with open(yml_file, encoding="utf-8") as f:
+                        content = yaml.safe_load(f)
+                        if content is not None:
+                            raw_config[key] = content
+                            print(f"[CONFIG] Loaded {yml_file.name}")
+                except yaml.YAMLError as e:
+                    print(f"[CONFIG] Error loading {yml_file.name}: {e}")
+                    raise
+
+        print(f"[CONFIG] Loaded YAML configuration from {config_dir}")
+        return cls.model_validate(raw_config)
+
+
+# =============================================================================
+# Hub Configuration Singleton
+# =============================================================================
+
+
+class HubConfig:
+    """
+    Singleton configuration for JupyterHub.
+
+    Aggregates runtime settings (from values.yaml) and static configuration
+    (from YAML files). Must be initialized before use.
+
+    Lifecycle:
+        1. jupyterhub_config.py calls HubConfig.init() with runtime settings
+        2. Business logic calls HubConfig.get() to access configuration
+    """
+
+    _instance: HubConfig | None = None
+    _initialized: bool = False
+
+    def __init__(self):
+        # Runtime settings (from values.yaml via z2jh)
+        self.auth_mode: str = "auto-login"
+        self.single_node_mode: bool = False
+        self.github_org_name: str = ""
+
+        # Quota overrides (from values.yaml)
+        self.quota_enabled: bool = False
+
+        # YAML configuration
+        self.yaml: YamlConfig = YamlConfig()
+
+        # JupyterHub config object (set during setup)
+        self._jupyterhub_config: Any = None
+
+    @classmethod
+    def init(
+        cls,
+        *,
+        auth_mode: str = "auto-login",
+        single_node_mode: bool | None = None,
+        github_org_name: str = "",
+        quota_enabled: bool | None = None,
+        quota_cpu_rate: int | None = None,
+        quota_minimum_to_start: int | None = None,
+        quota_default: int | None = None,
+        config_dir: str | Path | None = None,
+        accelerators_override: dict[str, dict] | None = None,
+    ) -> HubConfig:
+        """
+        Initialize the singleton with runtime settings.
+
+        Args:
+            auth_mode: Authentication mode ("auto-login", "dummy", "github", "multi")
+            single_node_mode: Disable runtime limits (auto-enabled for auto-login)
+            github_org_name: GitHub organization name for team lookups
+            quota_enabled: Override quota enabled setting
+            quota_cpu_rate: Override CPU quota rate
+            quota_minimum_to_start: Override minimum quota to start
+            quota_default: Override default quota for new users
+            config_dir: Path to YAML configuration directory
+            accelerators_override: Override accelerators from values.yaml
+
+        Returns:
+            The initialized HubConfig instance
+        """
+        if cls._instance is None:
+            cls._instance = cls()
+
+        instance = cls._instance
+
+        # Set runtime settings
+        instance.auth_mode = auth_mode
+        instance.github_org_name = github_org_name
+
+        # Single-node mode: auto-enable for auto-login
+        if single_node_mode is not None:
+            instance.single_node_mode = single_node_mode
+        else:
+            instance.single_node_mode = auth_mode == "auto-login"
+
+        # Load YAML configuration
+        if config_dir:
+            instance.yaml = YamlConfig.from_yaml_dir(config_dir)
+
+        # Apply accelerators override from values.yaml
+        if accelerators_override:
+            instance.yaml.accelerators = {
+                k: AcceleratorConfig.model_validate(v) for k, v in accelerators_override.items()
+            }
+
+        # Quota settings: defaults based on auth_mode, can be overridden
+        if quota_enabled is not None:
+            instance.quota_enabled = quota_enabled
+            instance.yaml.quota.enabled = quota_enabled
+        else:
+            # Disable quota for auto-login and dummy modes by default
+            instance.quota_enabled = auth_mode not in ("auto-login", "dummy")
+            instance.yaml.quota.enabled = instance.quota_enabled
+
+        if quota_cpu_rate is not None:
+            instance.yaml.quota.cpuRate = quota_cpu_rate
+        if quota_minimum_to_start is not None:
+            instance.yaml.quota.minimumToStart = quota_minimum_to_start
+        if quota_default is not None:
+            instance.yaml.quota.defaultQuota = quota_default
+
+        cls._initialized = True
+
+        # Log configuration
+        print("[CONFIG] HubConfig initialized:")
+        print(f"[CONFIG]   auth_mode={instance.auth_mode}")
+        print(f"[CONFIG]   single_node_mode={instance.single_node_mode}")
+        print(f"[CONFIG]   quota_enabled={instance.quota_enabled}")
+        if instance.quota_enabled:
+            print(f"[CONFIG]   quota_rates={instance.build_quota_rates()}")
+
+        return instance
+
+    @classmethod
+    def get(cls) -> HubConfig:
+        """
+        Get the singleton instance.
+
+        Raises:
+            RuntimeError: If HubConfig.init() has not been called
+        """
+        if not cls._initialized or cls._instance is None:
+            raise RuntimeError(
+                "HubConfig not initialized. Call HubConfig.init() in jupyterhub_config.py first."
+            )
+        return cls._instance
+
+    @classmethod
+    def is_initialized(cls) -> bool:
+        """Check if the singleton has been initialized."""
+        return cls._initialized
+
+    # =========================================================================
+    # Convenience Properties
+    # =========================================================================
+
+    @property
+    def resources(self) -> ResourcesConfig:
+        """Get resources configuration."""
+        return self.yaml.resources
+
+    @property
+    def accelerators(self) -> dict[str, AcceleratorConfig]:
+        """Get accelerators configuration."""
+        return self.yaml.accelerators
+
+    @property
+    def teams(self) -> TeamsConfig:
+        """Get teams configuration."""
+        return self.yaml.teams
+
+    @property
+    def quota(self) -> QuotaSettings:
+        """Get quota configuration."""
+        return self.yaml.quota
+
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    def get_resource_image(self, resource_type: str) -> str | None:
+        """Get container image for a resource type."""
+        return self.yaml.resources.images.get(resource_type)
+
+    def get_resource_requirements(self, resource_type: str) -> ResourceRequirements | None:
+        """Get resource requirements for a resource type."""
+        return self.yaml.resources.requirements.get(resource_type)
+
+    def get_accelerator_node_selector(self, accelerator_key: str) -> dict[str, str]:
+        """Get node selector for an accelerator type."""
+        if accelerator_key in self.yaml.accelerators:
+            return self.yaml.accelerators[accelerator_key].nodeSelector
+        return {}
+
+    def get_accelerator_env(self, accelerator_key: str) -> dict[str, str]:
+        """Get environment variables for an accelerator type."""
+        if accelerator_key in self.yaml.accelerators:
+            return self.yaml.accelerators[accelerator_key].env
+        return {}
+
+    def get_quota_rate(self, accelerator_key: str | None) -> int:
+        """Get quota rate for an accelerator type."""
+        if not accelerator_key:
+            return self.yaml.quota.cpuRate
+        if accelerator_key in self.yaml.accelerators:
+            return self.yaml.accelerators[accelerator_key].quotaRate
+        return self.yaml.quota.cpuRate
+
+    def get_team_resources(self, team: str) -> list[str]:
+        """Get available resources for a team."""
+        return self.yaml.teams.mapping.get(team, [])
+
+    def build_quota_rates(self) -> dict[str, int]:
+        """Build quota rates dict from accelerators config."""
+        rates = {"cpu": self.yaml.quota.cpuRate}
+        for key, accel in self.yaml.accelerators.items():
+            rates[key] = accel.quotaRate
+        return rates
+
+    def build_resource_images(self) -> dict[str, str]:
+        """Build resource images dict."""
+        return dict(self.yaml.resources.images)
+
+    def build_resource_requirements(self) -> dict[str, dict]:
+        """Build resource requirements dict."""
+        return {
+            k: v.model_dump(by_alias=True, exclude_none=True)
+            for k, v in self.yaml.resources.requirements.items()
+        }
+
+    def build_node_selector_mapping(self) -> dict[str, dict[str, str]]:
+        """Build node selector mapping from accelerators."""
+        return {k: v.nodeSelector for k, v in self.yaml.accelerators.items()}
+
+    def build_environment_mapping(self) -> dict[str, dict[str, str]]:
+        """Build environment mapping from accelerators."""
+        return {k: v.env for k, v in self.yaml.accelerators.items()}
+
+    def build_team_resource_mapping(self) -> dict[str, list[str]]:
+        """Build team resource mapping."""
+        return dict(self.yaml.teams.mapping)
+
+
+# =============================================================================
+# Legacy Compatibility
+# =============================================================================
+
+# Alias for backwards compatibility
+HubCoreConfig = YamlConfig

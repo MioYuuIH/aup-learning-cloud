@@ -1,0 +1,15 @@
+# Quota System Configuration
+# Controls user quota for container time limits.
+
+# Enable/disable the quota system
+# Automatically disabled in auto-login and dummy modes
+enabled: true
+
+# Quota rate for CPU-only containers (units per minute)
+cpuRate: 1
+
+# Minimum quota required to start any container
+minimumToStart: 10
+
+# Default quota for new users (0 = no quota, must be set by admin)
+defaultQuota: 0

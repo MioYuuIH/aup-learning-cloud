@@ -1,0 +1,44 @@
+# Resource Images and Requirements Configuration
+# This file defines container images and resource requirements for each resource type.
+
+images:
+  cpu: "ghcr.io/amdresearch/auplc-default:latest"
+  Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
+  Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
+  Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
+  Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
+
+requirements:
+  cpu:
+    cpu: "2"
+    memory: "4Gi"
+    memory_limit: "6Gi"
+
+  Course-CV:
+    cpu: "4"
+    memory: "16Gi"
+    memory_limit: "24Gi"
+    amd.com/gpu: "1"
+
+  Course-DL:
+    cpu: "4"
+    memory: "16Gi"
+    memory_limit: "24Gi"
+    amd.com/gpu: "1"
+
+  Course-LLM:
+    cpu: "4"
+    memory: "16Gi"
+    memory_limit: "24Gi"
+    amd.com/gpu: "1"
+
+  Course-PhySim:
+    cpu: "4"
+    memory: "16Gi"
+    memory_limit: "24Gi"
+    amd.com/gpu: "1"
+
+  none:
+    cpu: "2"
+    memory: "4Gi"
+    memory_limit: "6Gi"

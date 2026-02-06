@@ -69,10 +69,19 @@ RUN chown -R 1000:1000 /usr/local/share/jupyterhub/static/admin-ui/
 
 # Install Python packages as root
 RUN if [ -n "${PIP_INDEX_URL}" ]; then \
-        pip install -i "${PIP_INDEX_URL}" jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic; \
+        pip install -i "${PIP_INDEX_URL}" jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic pyyaml; \
     else \
-        pip install jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic; \
+        pip install jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic pyyaml; \
     fi
+
+# Copy core business logic package
+COPY --chmod=644 runtime/jupyterhub/core/ /usr/local/lib/core/
+
+# Ensure correct permissions for core
+RUN chown -R 1000:1000 /usr/local/lib/core/
+
+# Add core to Python path
+ENV PYTHONPATH="/usr/local/lib:${PYTHONPATH}"
 
 # Switch back to jovyan user
 USER jovyan

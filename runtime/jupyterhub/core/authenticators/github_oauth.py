@@ -16,15 +16,29 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-#
-# Type stubs for jupyterhub-multiauthenticator
-from typing import Any
 
-from jupyterhub.auth import Authenticator
+"""
+GitHub OAuth Authenticator
 
-class MultiAuthenticator(Authenticator):
-    """Authenticator that supports multiple authentication methods."""
+Custom GitHub OAuth authenticator with team integration support.
+"""
 
-    _authenticators: list[Authenticator]
+from __future__ import annotations
 
-    def __init__(self, **kwargs: Any) -> None: ...
+from oauthenticator.github import GitHubOAuthenticator
+
+
+class CustomGitHubOAuthenticator(GitHubOAuthenticator):
+    """GitHub OAuth authenticator with access token preservation."""
+
+    name = "github"
+
+    async def authenticate(self, handler, data=None):
+        result = await super().authenticate(handler, data)
+        if not result:
+            return None
+
+        access_token = result["auth_state"]["access_token"]
+        result["auth_state"]["access_token"] = access_token
+
+        return result
