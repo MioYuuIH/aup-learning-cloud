@@ -52,11 +52,12 @@ ARG PIP_INDEX_URL
 # Switch to root for setup
 USER root
 
+# Install uv (much faster than pip)
+RUN pip install --no-cache-dir uv
+
 # Create the needed folders
-RUN mkdir -p /tmp/custom_templates
-RUN mkdir -p /tmp/custom_templates/static/css
-RUN mkdir -p /tmp/custom_templates/static/js
-RUN mkdir -p /usr/local/share/jupyterhub/static/admin-ui
+RUN mkdir -p /tmp/custom_templates/static/css /tmp/custom_templates/static/js \
+    /usr/local/share/jupyterhub/static/admin-ui
 
 # Copy template files with correct permissions
 COPY --chmod=644 runtime/jupyterhub/frontend/templates/ /tmp/custom_templates/
@@ -67,11 +68,12 @@ COPY --from=admin-ui-builder /app/dist/ /usr/local/share/jupyterhub/static/admin
 # Fix permissions
 RUN chown -R 1000:1000 /usr/local/share/jupyterhub/static/admin-ui/
 
-# Install Python packages as root
+# Install Python packages with uv (10-100x faster than pip)
+COPY runtime/jupyterhub/requirements.txt /tmp/requirements.txt
 RUN if [ -n "${PIP_INDEX_URL}" ]; then \
-        pip install -i "${PIP_INDEX_URL}" jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic pyyaml; \
+        uv pip install --system --index-url "${PIP_INDEX_URL}" -r /tmp/requirements.txt; \
     else \
-        pip install jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic pyyaml; \
+        uv pip install --system -r /tmp/requirements.txt; \
     fi
 
 # Copy core business logic package
