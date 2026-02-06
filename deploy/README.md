@@ -317,34 +317,41 @@ No credentials required. Users are automatically logged in as 'student'. Suitabl
 Update [runtime/values.yaml](../runtime/values.yaml):
 
 ```yaml
-GitHubOAuthenticator:
-  oauth_callback_url: "https://<Your-Address>/hub/github/oauth_callback"
-  client_id: "YOUR-CLIENT-ID"
-  client_secret: "YOUR-CLIENT-SECRET"
-  allowed_organizations:
-    - <YOUR-ORG-NAME>
-  scope:
-    - read:user
-    - read:org
-```
+custom:
+  authMode: "github"
+  teams:
+    mapping:
+      cpu: [cpu]
+      gpu: [Course-CV, Course-DL, Course-LLM]
 
-Update [jupyterhub_config.py](../runtime/hub/core/jupyterhub_config.py) to map teams to resources:
-
-```python
-TEAM_RESOURCE_MAPPING = {
-    "cpu": ["cpu"],
-    "gpu": ["Course-CV", "Course-DL", "Course-LLM"],
-    "official": ["cpu", "Course-CV", "Course-DL", "Course-LLM"],
-    "AUP": ["Course-CV", "Course-DL", "Course-LLM"]
-}
+hub:
+  config:
+    GitHubOAuthenticator:
+      oauth_callback_url: "https://<Your-Address>/hub/oauth_callback"
+      client_id: "YOUR-CLIENT-ID"
+      client_secret: "YOUR-CLIENT-SECRET"
+      allowed_organizations:
+        - <YOUR-ORG-NAME>
+      scope:
+        - read:user
+        - read:org
 ```
 
 ##### Option 3: Multi-Login (GitHub + Native)
 
-Set in [jupyterhub_config.py](../runtime/hub/core/jupyterhub_config.py):
+Update [runtime/values.yaml](../runtime/values.yaml):
 
-```python
-c.JupyterHub.authenticator_class = CustomMultiAuthenticator
+```yaml
+custom:
+  authMode: "multi"
+  teams:
+    mapping:
+      native-users: [cpu, Course-CV, Course-DL]
+
+hub:
+  config:
+    GitHubOAuthenticator:
+      # Same as Option 2
 ```
 
 > For more details, see [JupyterHub Configuration Guide](../docs/jupyterhub/README.md)
