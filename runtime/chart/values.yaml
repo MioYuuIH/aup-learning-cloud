@@ -44,111 +44,19 @@ custom:
     enabled: false
 
   # Accelerator configuration (GPU/NPU nodes)
-  # This centralizes all accelerator info: display, node selector, env, quota rate
-  accelerators:
-    # GPU accelerators
-    phx:
-      displayName: "AMD Radeon™ 780M (Phoenix Point iGPU)"
-      description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
-      nodeSelector:
-        node-type: phx
-      env:
-        HSA_OVERRIDE_GFX_VERSION: "11.0.0"
-      quotaRate: 2
-    strix:
-      displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
-      description: "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X"
-      nodeSelector:
-        node-type: strix
-      env: {}
-      quotaRate: 2
-    strix-halo:
-      displayName: "AMD Radeon™ 8060S (Strix Halo iGPU)"
-      description: "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X"
-      nodeSelector:
-        node-type: strix-halo
-      env: {}
-      quotaRate: 3
-    dgpu:
-      displayName: "AMD Radeon™ 9070XT (Desktop GPU)"
-      description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6"
-      nodeSelector:
-        node-type: dgpu
-      env: {}
-      quotaRate: 4
-    # NPU accelerators (note: uses "type" label, not "node-type")
-    strix-npu:
-      displayName: "AMD XDNA2 (Strix Point NPU)"
-      description: "AMD XDNA2 NPU with AI acceleration"
-      nodeSelector:
-        type: strix
-      env: {}
-      quotaRate: 1
+  # Define these in runtime/values.yaml, not here
+  accelerators: {}
 
   # Resource images and requirements
+  # Define these in runtime/values.yaml, not here
   resources:
-    images:
-      cpu: "ghcr.io/amdresearch/auplc-default:latest"
-      Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
-      Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
-      Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
-      Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
-
-    requirements:
-      cpu:
-        cpu: "2"
-        memory: "4Gi"
-        memory_limit: "6Gi"
-      Course-CV:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
-        amd.com/gpu: "1"
-      Course-DL:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
-        amd.com/gpu: "1"
-      Course-LLM:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
-        amd.com/gpu: "1"
-      Course-PhySim:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
-        amd.com/gpu: "1"
-      none:
-        cpu: "2"
-        memory: "4Gi"
-        memory_limit: "6Gi"
+    images: {}
+    requirements: {}
 
   # Team to resource mapping
+  # Define these in runtime/values.yaml, not here
   teams:
-    mapping:
-      cpu:
-        - cpu
-      gpu:
-        - Course-CV
-        - Course-DL
-        - Course-LLM
-        - Course-PhySim
-      official:
-        - cpu
-        - Course-CV
-        - Course-DL
-        - Course-LLM
-        - Course-PhySim
-      AUP:
-        - Course-CV
-        - Course-DL
-        - Course-LLM
-        - Course-PhySim
-      native-users:
-        - Course-CV
-        - Course-DL
-        - Course-LLM
+    mapping: {}
 
   # User quota management system
   quota:
