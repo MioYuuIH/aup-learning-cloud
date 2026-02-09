@@ -67,6 +67,20 @@ SOFTWARE.
       <link rel="stylesheet"
             href="{{ static_url('css/style.min.css') }}"
             type="text/css" />
+      <style>
+        /* AMD logo color: black in light mode, white in dark mode */
+        #amd-logo svg {
+          color: #000000;
+        }
+        @media (prefers-color-scheme: dark) {
+          #amd-logo svg {
+            color: #ffffff;
+          }
+        }
+        [data-bs-theme="dark"] #amd-logo svg {
+          color: #ffffff;
+        }
+      </style>
     {% endblock stylesheet %}
     {% block favicon %}
       <link rel="icon" href="{{ static_url('favicon.ico') }}" type="image/x-icon">
@@ -145,7 +159,7 @@ SOFTWARE.
            {% block logo %}
               <span id="amd-logo" class="navbar-brand">
                <a href="{{ logo_url or base_url }}">
-                 <svg style="width: 120px; height: auto; color: #000000;" id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 139.72 33.32" fill="currentColor">
+                 <svg style="width: 120px; height: auto;" id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 139.72 33.32" fill="currentColor">
                    <title>AMD logo</title>
                    <path d="M33,31.14H25.21l-2.37-5.72H9.92L7.76,31.14H.14L11.78,2.26h8.34Zm-16.89-22L11.83,20.39h8.89Z" transform="translate(-0.14 -0.03)" />
                    <path d="M61.1,2.26h6.27V31.14h-7.2v-18l-7.79,9.06h-1.1L43.49,13.1v18h-7.2V2.26h6.27L51.83,13Z" transform="translate(-0.14 -0.03)" />
@@ -224,19 +238,19 @@ SOFTWARE.
                         {% if not user.name.startswith('github:') %}
                         <a id="change-password"
                            role="button"
-                           class="btn btn-sm btn-outline-dark me-1"
+                           class="btn btn-sm btn-outline-secondary me-1"
                            href="{{ base_url }}auth/change-password">
                           <i aria-hidden="true" class="fa fa-key"></i> Change Password
                         </a>
                         {% endif %}
                         <a id="logout"
                            role="button"
-                           class="btn btn-sm btn-outline-dark"
+                           class="btn btn-sm btn-outline-secondary"
                            href="{{ logout_url }}"> <i aria-hidden="true" class="fa fa-sign-out"></i> Logout</a>
                       {% else %}
                         <a id="login"
                            role="button"
-                           class="btn btn-sm btn-outline-dark"
+                           class="btn btn-sm btn-outline-secondary"
                            href="{{ login_url }}">Login</a>
                       {% endif %}
                     </span>

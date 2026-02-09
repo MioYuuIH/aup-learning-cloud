@@ -573,15 +573,14 @@ export function UserList() {
                     </InputGroup>
                   ) : (
                     <span
-                      style={{
-                        cursor: 'pointer',
-                        fontWeight: 500,
-                        color: quotaMap.get(user.name)?.unlimited
-                          ? '#198754'  // green for unlimited
+                      style={{ cursor: 'pointer', fontWeight: 500 }}
+                      className={
+                        quotaMap.get(user.name)?.unlimited
+                          ? 'text-success'
                           : (quotaMap.get(user.name)?.balance ?? 0) < 10
-                            ? '#dc3545'  // red for low
-                            : '#333',  // dark for normal
-                      }}
+                            ? 'text-danger'
+                            : ''
+                      }
                       onClick={() => handleQuotaEdit(user.name, quotaMap.get(user.name)?.balance ?? 0, quotaMap.get(user.name)?.unlimited === true)}
                       title="Click to edit (-1 or ∞ for unlimited)"
                     >
@@ -672,7 +671,7 @@ export function UserList() {
             {/* Expanded User Details */}
             {expandedUsers.has(user.name) && (
               <tr>
-                <td colSpan={quotaEnabled ? 8 : 7} style={{ backgroundColor: '#f8f9fa' }}>
+                <td colSpan={quotaEnabled ? 8 : 7} className="bg-body-secondary">
                   <div className="d-flex gap-4 p-2">
                     {/* User Info */}
                     <div style={{ flex: 1 }}>
@@ -680,7 +679,7 @@ export function UserList() {
                       <table className="table table-sm table-bordered mb-0" style={{ fontSize: '0.85em' }}>
                         <tbody>
                           <tr><td style={{ width: '140px' }}><strong>admin</strong></td><td>{user.admin ? 'true' : 'false'}</td></tr>
-                          <tr><td><strong>auth_state</strong></td><td>{user.auth_state && Object.keys(user.auth_state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: '#f5f5f5', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(user.auth_state, null, 2)}</pre> : ''}</td></tr>
+                          <tr><td><strong>auth_state</strong></td><td>{user.auth_state && Object.keys(user.auth_state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(user.auth_state, null, 2)}</pre> : ''}</td></tr>
                           <tr><td><strong>created</strong></td><td>{user.created || ''}</td></tr>
                           <tr><td><strong>groups</strong></td><td>{user.groups?.join(', ') || ''}</td></tr>
                           <tr><td><strong>kind</strong></td><td>user</td></tr>
@@ -709,10 +708,10 @@ export function UserList() {
                                 <tr><td><strong>progress_url</strong></td><td>{server.progress_url || ''}</td></tr>
                                 <tr><td><strong>ready</strong></td><td>{server.ready ? 'true' : 'false'}</td></tr>
                                 <tr><td><strong>started</strong></td><td>{server.started || ''}</td></tr>
-                                <tr><td><strong>state</strong></td><td>{server.state && Object.keys(server.state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: '#f5f5f5', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.state, null, 2)}</pre> : ''}</td></tr>
+                                <tr><td><strong>state</strong></td><td>{server.state && Object.keys(server.state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.state, null, 2)}</pre> : ''}</td></tr>
                                 <tr><td><strong>stopped</strong></td><td>{!server.ready ? 'true' : 'false'}</td></tr>
                                 <tr><td><strong>url</strong></td><td>{server.url || ''}</td></tr>
-                                <tr><td><strong>user_options</strong></td><td>{server.user_options && Object.keys(server.user_options).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: '#f5f5f5', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.user_options, null, 2)}</pre> : ''}</td></tr>
+                                <tr><td><strong>user_options</strong></td><td>{server.user_options && Object.keys(server.user_options).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.user_options, null, 2)}</pre> : ''}</td></tr>
                               </React.Fragment>
                             ))}
                           </tbody>

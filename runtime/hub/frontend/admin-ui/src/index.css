@@ -6,9 +6,9 @@ body {
   min-height: 100vh;
 }
 
-/* Ensure code blocks are visible */
+/* Ensure code blocks are visible in both light and dark modes */
 code {
-  background-color: #f8f9fa;
+  background-color: var(--bs-tertiary-bg);
   padding: 0.2em 0.4em;
   border-radius: 3px;
   font-size: 0.9em;

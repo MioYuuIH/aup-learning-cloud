@@ -10,7 +10,7 @@
         {% if default_server.active %}<a id="stop" role="button" class="btn btn-lg btn-danger">Stop My Server</a>{% endif %}
         <a id="start"
            role="button"
-           class="btn btn-lg btn-dark"
+           class="btn btn-lg btn-primary"
            href="{{ url }}">
           {% if not default_server.active %}Start{% endif %}
           My Server
@@ -45,7 +45,7 @@
                        placeholder="name-your-server">
                 <button role="button"
                         type="button"
-                        class="new-server-btn btn btn-xs btn-dark">Add New Server</button>
+                        class="new-server-btn btn btn-xs btn-primary">Add New Server</button>
               </div>
             </td>
           </tr>
@@ -72,7 +72,7 @@
                    class="stop-server btn btn-xs btn-danger{% if not spawner.active %} hidden{% endif %}"
                    id="stop-{{ spawner.name }}">stop</a>
                 <a role="button"
-                   class="start-server btn btn-xs btn-dark {% if spawner.active %}hidden{% endif %}"
+                   class="start-server btn btn-xs btn-primary {% if spawner.active %}hidden{% endif %}"
                    id="start-{{ spawner.name }}"
                    href="{{ base_url }}spawn/{{ user.name }}/{{ spawner.name }}">start</a>
                 <button role="button"

@@ -31,46 +31,125 @@ SOFTWARE.
     <title>AUP Learning Cloud</title>
 
 <style>
+    /* Dark mode variables fallback (when JupyterLab vars not available) */
+    :root {
+        --dark-bg-primary: #212529;
+        --dark-bg-secondary: #2b3035;
+        --dark-bg-tertiary: #343a40;
+        --dark-border: #495057;
+        --dark-text-primary: #e9ecef;
+        --dark-text-secondary: #adb5bd;
+        --dark-text-muted: #6c757d;
+        --dark-accent: #0d6efd;
+        --dark-warning-bg: #332701;
+        --dark-warning-border: #664d03;
+        --dark-warning-text: #ffda6a;
+    }
+
     @media (prefers-color-scheme: dark) {
+        body {
+            background: var(--jp-layout-color0, var(--dark-bg-primary)) !important;
+            color: var(--jp-ui-font-color0, var(--dark-text-primary)) !important;
+        }
         .resource-container {
-            background: var(--jp-layout-color1) !important;
-            border-color: var(--jp-border-color1) !important;
+            background: var(--jp-layout-color1, var(--dark-bg-secondary)) !important;
+            border-color: var(--jp-border-color1, var(--dark-border)) !important;
         }
         .resource-container h5,
         .resource-container strong {
-            color: var(--jp-ui-font-color0) !important;
+            color: var(--jp-ui-font-color0, var(--dark-text-primary)) !important;
         }
         .resource-container .env-desc {
-            color: var(--jp-ui-font-color1) !important;
+            color: var(--jp-ui-font-color1, var(--dark-text-secondary)) !important;
         }
         .resource-container .dot {
-            color: var(--jp-ui-font-color2) !important;
+            color: var(--jp-ui-font-color2, var(--dark-text-muted)) !important;
         }
         .resource-container .resource-tag {
-            color: var(--jp-warn-color0) !important;
-            background: var(--jp-warn-color3) !important;
-            border-color: var(--jp-warn-color2) !important;
+            color: var(--dark-text-primary) !important;
+            background: var(--dark-bg-tertiary) !important;
+            border-color: var(--dark-border) !important;
         }
         .resource-container input[type="number"] {
-            background: var(--jp-layout-color1) !important;
-            color: var(--jp-ui-font-color1) !important;
-            border-color: var(--jp-border-color1) !important;
+            background: var(--jp-layout-color1, var(--dark-bg-secondary)) !important;
+            color: var(--jp-ui-font-color1, var(--dark-text-primary)) !important;
+            border-color: var(--jp-border-color1, var(--dark-border)) !important;
         }
         .gpu-selection {
-            background: var(--jp-layout-color1) !important;
-            border-color: var(--jp-border-color1) !important;
+            background: var(--jp-layout-color1, var(--dark-bg-secondary)) !important;
+            border-color: var(--jp-border-color1, var(--dark-border)) !important;
+        }
+        .gpu-selection h6 {
+            color: var(--dark-text-primary) !important;
+            border-bottom-color: var(--dark-border) !important;
+        }
+        .gpu-selection h6::after {
+            background: var(--dark-text-secondary) !important;
         }
         .gpu-option {
-            background: var(--jp-layout-color0) !important;
-            border-color: var(--jp-border-color1) !important;
+            background: var(--jp-layout-color0, var(--dark-bg-tertiary)) !important;
+            border-color: var(--jp-border-color1, var(--dark-border)) !important;
+        }
+        .gpu-option:hover {
+            background: var(--dark-bg-secondary) !important;
+        }
+        .gpu-option.selected {
+            background: var(--dark-bg-secondary) !important;
+        }
+        .gpu-option-name {
+            color: var(--dark-text-primary) !important;
+        }
+        .gpu-option-desc {
+            color: var(--dark-text-secondary) !important;
         }
         .resource-category-header {
-            color: var(--jp-ui-font-color0) !important;
-            background: var(--jp-layout-color2) !important;
-            border-color: var(--jp-border-color1) !important;
+            color: var(--jp-ui-font-color0, var(--dark-text-primary)) !important;
+            background: var(--jp-layout-color2, var(--dark-bg-tertiary)) !important;
+            border-color: var(--jp-border-color1, var(--dark-border)) !important;
+        }
+        .resource-category-header:hover {
+            background: var(--dark-bg-secondary) !important;
+        }
+        .resource-category {
+            border-color: var(--dark-border) !important;
         }
         .collapsible-content {
-            background: var(--jp-layout-color1) !important;
+            background: var(--jp-layout-color1, var(--dark-bg-secondary)) !important;
+        }
+        .loading {
+            color: var(--dark-text-secondary) !important;
+        }
+        .spinner {
+            border-color: var(--dark-border) !important;
+            border-top-color: var(--dark-text-primary) !important;
+        }
+        #resourceForm {
+            background: var(--dark-bg-secondary) !important;
+        }
+        #insufficientQuotaWarning,
+        #noResources {
+            background: var(--dark-warning-bg) !important;
+            border-color: var(--dark-warning-border) !important;
+            color: var(--dark-warning-text) !important;
+        }
+        #runtimeContainer {
+            border-top-color: var(--dark-border) !important;
+        }
+        #runtimeContainer label {
+            color: var(--dark-text-primary) !important;
+        }
+        #quotaCostPreview span,
+        #quotaDisplaySimple {
+            color: var(--dark-text-secondary) !important;
+        }
+        .collapse-icon {
+            color: var(--dark-text-primary) !important;
+        }
+        .gpu-options-container::-webkit-scrollbar-track {
+            background: var(--dark-bg-tertiary) !important;
+        }
+        .gpu-options-container::-webkit-scrollbar-thumb {
+            background: var(--dark-text-muted) !important;
         }
     }
 
