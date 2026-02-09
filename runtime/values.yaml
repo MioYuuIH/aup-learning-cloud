@@ -24,30 +24,166 @@
 #   helm install jupyterhub ./chart -n jupyterhub --create-namespace -f values.yaml
 #
 # This file contains environment-specific overrides.
-# See jupyterhub/values.yaml for all available options and defaults.
+# See chart/values.yaml for all available options and defaults.
+#
+# ============================================================================
+# Course Management Guide
+# ============================================================================
+# Add a new course:
+#   1. Add course image in custom.resources.images
+#   2. Add resource requirements in custom.resources.requirements
+#   3. Add team access permissions in custom.teams.mapping
+#
+# Modify a course:
+#   - Change image address or tag in images
+#   - Adjust CPU/memory/GPU settings in requirements
+#
+# Add a new accelerator:
+#   - Add new GPU/NPU node type in custom.accelerators
+# ============================================================================
 
-# Custom overrides (uncomment to customize)
-# custom:
-#   authMode: "github"  # auto-login | dummy | github | multi
-#   adminUser:
-#     enabled: true
-#   accelerators:
-#     my-gpu:
-#       displayName: "My Custom GPU"
-#       nodeSelector:
-#         node-type: my-gpu
-#       quotaRate: 2
-#   resources:
-#     images:
-#       my-course: "my-registry/my-image:latest"
-#     requirements:
-#       my-course:
-#         cpu: "4"
-#         memory: "16Gi"
-#   teams:
-#     mapping:
-#       my-team:
-#         - my-course
+custom:
+  # Authentication mode
+  # - auto-login: No credentials required, auto-login as 'student' (for single-node dev)
+  # - dummy: Accept any username/password (for testing)
+  # - github: GitHub OAuth authentication
+  # - multi: GitHub OAuth + Local accounts
+  authMode: "auto-login"
+
+  # Auto-create admin user on first install
+  adminUser:
+    enabled: false
+
+  # ============================================================================
+  # Accelerator Configuration
+  # ============================================================================
+  # Define available GPU/NPU node types for course selection interface
+  accelerators:
+    phx:
+      displayName: "AMD Radeon™ 780M (Phoenix Point iGPU)"
+      description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
+      nodeSelector:
+        node-type: phx
+      env:
+        HSA_OVERRIDE_GFX_VERSION: "11.0.0"
+      quotaRate: 2
+    strix:
+      displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
+      description: "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X"
+      nodeSelector:
+        node-type: strix
+      env: {}
+      quotaRate: 2
+    strix-halo:
+      displayName: "AMD Radeon™ 8060S (Strix Halo iGPU)"
+      description: "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X"
+      nodeSelector:
+        node-type: strix-halo
+      env: {}
+      quotaRate: 3
+    dgpu:
+      displayName: "AMD Radeon™ 9070XT (Desktop GPU)"
+      description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6"
+      nodeSelector:
+        node-type: dgpu
+      env: {}
+      quotaRate: 4
+    strix-npu:
+      displayName: "AMD XDNA2 (Strix Point NPU)"
+      description: "AMD XDNA2 NPU with AI acceleration"
+      nodeSelector:
+        type: strix
+      env: {}
+      quotaRate: 1
+
+  # ============================================================================
+  # Course Resources Configuration
+  # ============================================================================
+  resources:
+    # Course Images
+    # Add new course images here
+    images:
+      cpu: "ghcr.io/amdresearch/auplc-default:latest"
+      Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
+      Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
+      Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
+      Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
+
+    # Course Resource Requirements
+    # Define resource quotas for each course
+    requirements:
+      cpu:
+        cpu: "2"
+        memory: "4Gi"
+        memory_limit: "6Gi"
+      Course-CV:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-DL:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-LLM:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-PhySim:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      none:
+        cpu: "2"
+        memory: "4Gi"
+        memory_limit: "6Gi"
+
+  # ============================================================================
+  # Team Permission Configuration
+  # ============================================================================
+  # Define which teams can access which courses
+  teams:
+    mapping:
+      cpu:
+        - cpu
+      gpu:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      official:
+        - cpu
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      AUP:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      native-users:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+
+  # ============================================================================
+  # Quota Management
+  # ============================================================================
+  quota:
+    # Enable quota system (auto-disabled for auto-login/dummy modes if not set)
+    enabled: null
+    # CPU-only quota consumption rate
+    cpuRate: 1
+    # Minimum quota required to start any container
+    minimumToStart: 10
+    # Default quota for new users (0 = no initial allocation)
+    defaultQuota: 0
+    # Auto-refresh rules: each rule generates a K8s CronJob
+    refreshRules: {}
 
 # Use K3s built-in local-path storage (no NFS required)
 hub:
