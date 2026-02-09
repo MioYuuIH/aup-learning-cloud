@@ -51,7 +51,7 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
       // Load all users for dropdown
       try {
         setLoadingUsers(true);
-        const response = await api.getUsers(0, 1000);
+        const response = await api.getUsers({ offset: 0, limit: 1000 });
         setAllUsers(response.items || response as unknown as User[]);
       } catch (err) {
         console.error('Failed to load users:', err);

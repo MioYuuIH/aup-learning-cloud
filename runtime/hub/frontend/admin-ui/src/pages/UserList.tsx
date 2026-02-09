@@ -17,7 +17,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, Form, InputGroup, Badge, Spinner, Alert, ButtonGroup, Modal } from 'react-bootstrap';
 import type { User } from '../types';
@@ -28,12 +28,21 @@ import { SetPasswordModal } from '../components/SetPasswordModal';
 import { EditUserModal } from '../components/EditUserModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 
+// Map frontend sort columns to API sort parameters
+const sortColumnToApiSort: Record<string, string> = {
+  name: 'name',
+  admin: 'admin',
+  lastActivity: 'last_activity',
+};
+
 export function UserList() {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -49,8 +58,8 @@ export function UserList() {
   const [quotaInput, setQuotaInput] = useState('');
   const [showBatchQuotaModal, setShowBatchQuotaModal] = useState(false);
   const [batchQuotaInput, setBatchQuotaInput] = useState('100');
-  const [sortColumn, setSortColumn] = useState<'name' | 'admin' | 'quota' | 'server' | 'lastActivity'>('name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortColumn, setSortColumn] = useState<'name' | 'admin' | 'quota' | 'server' | 'lastActivity'>('lastActivity');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -58,18 +67,46 @@ export function UserList() {
   const jhdata = window.jhdata ?? {};
   const baseUrl = jhdata.base_url ?? '/hub/';
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Build API sort parameter
+  const apiSort = useMemo(() => {
+    const apiColumn = sortColumnToApiSort[sortColumn] || 'last_activity';
+    return sortDirection === 'desc' ? `-${apiColumn}` : apiColumn;
+  }, [sortColumn, sortDirection]);
+
+  // Build state filter for active servers
+  const stateFilter = useMemo(() => {
+    return onlyActiveServers ? 'active' : '';
+  }, [onlyActiveServers]);
+
   const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.getUsers(0, 1000);
-      setUsers(response.items || response as unknown as User[]);
+      const offset = (currentPage - 1) * itemsPerPage;
+      const response = await api.getUsers({
+        offset,
+        limit: itemsPerPage,
+        nameFilter: debouncedSearch,
+        sort: apiSort,
+        state: stateFilter,
+      });
+      setUsers(response.items || []);
+      setTotalUsers(response._pagination?.total || response.items?.length || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, itemsPerPage, debouncedSearch, apiSort, stateFilter]);
 
   const loadQuota = useCallback(async () => {
     try {
@@ -86,10 +123,15 @@ export function UserList() {
     }
   }, []);
 
+  // Load users when pagination, search, sort, or filter changes
   useEffect(() => {
     loadUsers();
+  }, [loadUsers]);
+
+  // Load quota once on mount
+  useEffect(() => {
     loadQuota();
-  }, [loadUsers, loadQuota]);
+  }, [loadQuota]);
 
   const handleQuotaEdit = (username: string, currentBalance: number, isUnlimited: boolean) => {
     setEditingQuota(username);
@@ -163,58 +205,27 @@ export function UserList() {
     }
   };
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(search.toLowerCase());
-    const matchesActiveFilter = !onlyActiveServers || user.server !== null;
-    return matchesSearch && matchesActiveFilter;
-  });
-
-  // Sorting
+  // Handle sort column click - only allow sortable columns
   const handleSort = (column: typeof sortColumn) => {
+    // Only allow sorting by columns the API supports
+    if (!sortColumnToApiSort[column]) return;
+
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortColumn(column);
-      setSortDirection('asc');
+      setSortDirection('desc');
     }
-    setCurrentPage(1); // Reset to first page when sorting changes
+    setCurrentPage(1);
   };
 
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    let comparison = 0;
-    switch (sortColumn) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case 'admin':
-        comparison = (a.admin ? 1 : 0) - (b.admin ? 1 : 0);
-        break;
-      case 'quota': {
-        const quotaA = quotaMap.get(a.name)?.balance ?? 0;
-        const quotaB = quotaMap.get(b.name)?.balance ?? 0;
-        comparison = quotaA - quotaB;
-        break;
-      }
-      case 'server':
-        comparison = (a.server ? 1 : 0) - (b.server ? 1 : 0);
-        break;
-      case 'lastActivity': {
-        const dateA = a.last_activity ? new Date(a.last_activity).getTime() : 0;
-        const dateB = b.last_activity ? new Date(b.last_activity).getTime() : 0;
-        comparison = dateA - dateB;
-        break;
-      }
-    }
-    return sortDirection === 'asc' ? comparison : -comparison;
-  });
-
-  // Pagination (use sortedUsers)
-  const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+  // Pagination is now handled by the API
+  const totalPages = Math.ceil(totalUsers / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedUsers = sortedUsers.slice(startIndex, startIndex + itemsPerPage);
 
-  // Sort indicator helper
+  // Sort indicator helper - only show for sortable columns
   const SortIcon = ({ column }: { column: typeof sortColumn }) => {
+    if (!sortColumnToApiSort[column]) return null;
     if (sortColumn !== column) return <span style={{ opacity: 0.3 }}> ↕</span>;
     return <span> {sortDirection === 'asc' ? '↑' : '↓'}</span>;
   };
@@ -248,8 +259,8 @@ export function UserList() {
 
   const handleStartAll = async () => {
     const usersToStart = selectedUsers.size > 0
-      ? filteredUsers.filter(u => selectedUsers.has(u.name) && !u.server)
-      : filteredUsers.filter(u => !u.server);
+      ? users.filter(u => selectedUsers.has(u.name) && !u.server)
+      : users.filter(u => !u.server);
 
     setActionLoading('start-all');
     for (const user of usersToStart) {
@@ -265,8 +276,8 @@ export function UserList() {
 
   const handleStopAll = async () => {
     const usersToStop = selectedUsers.size > 0
-      ? filteredUsers.filter(u => selectedUsers.has(u.name) && u.server)
-      : filteredUsers.filter(u => u.server);
+      ? users.filter(u => selectedUsers.has(u.name) && u.server)
+      : users.filter(u => u.server);
 
     setActionLoading('stop-all');
     for (const user of usersToStop) {
@@ -297,10 +308,10 @@ export function UserList() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedUsers.size === paginatedUsers.length) {
+    if (selectedUsers.size === users.length) {
       setSelectedUsers(new Set());
     } else {
-      setSelectedUsers(new Set(paginatedUsers.map(u => u.name)));
+      setSelectedUsers(new Set(users.map(u => u.name)));
     }
   };
 
@@ -448,10 +459,7 @@ export function UserList() {
           <Form.Control
             placeholder="Search users..."
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
           />
           {search && (
             <Button variant="outline-secondary" onClick={() => setSearch('')}>
@@ -468,7 +476,7 @@ export function UserList() {
             setOnlyActiveServers(e.target.checked);
             setCurrentPage(1);
           }}
-          className="d-flex align-items-center"
+          className="d-flex align-items-center ms-3"
         />
       </div>
 
@@ -480,7 +488,7 @@ export function UserList() {
             <th style={{ width: '40px' }}>
               <Form.Check
                 type="checkbox"
-                checked={selectedUsers.size === paginatedUsers.length && paginatedUsers.length > 0}
+                checked={selectedUsers.size === users.length && users.length > 0}
                 onChange={toggleSelectAll}
               />
             </th>
@@ -491,12 +499,12 @@ export function UserList() {
               Admin<SortIcon column="admin" />
             </th>
             {quotaEnabled && (
-              <th style={{ width: '120px', cursor: 'pointer' }} onClick={() => handleSort('quota')}>
-                Quota<SortIcon column="quota" />
+              <th style={{ width: '120px' }}>
+                Quota
               </th>
             )}
-            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('server')}>
-              Server<SortIcon column="server" />
+            <th>
+              Server
             </th>
             <th style={{ cursor: 'pointer' }} onClick={() => handleSort('lastActivity')}>
               Last Activity<SortIcon column="lastActivity" />
@@ -505,7 +513,7 @@ export function UserList() {
           </tr>
         </thead>
         <tbody>
-          {paginatedUsers.map((user) => (
+          {users.map((user) => (
             <React.Fragment key={user.name}>
             <tr>
               <td>
@@ -722,17 +730,17 @@ export function UserList() {
         </tbody>
       </Table>
 
-      {filteredUsers.length === 0 && (
+      {users.length === 0 && !loading && (
         <div className="text-center text-muted py-4">
-          {search || onlyActiveServers ? 'No users match your filters.' : 'No users found.'}
+          {debouncedSearch || onlyActiveServers ? 'No users match your filters.' : 'No users found.'}
         </div>
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {totalUsers > 0 && (
         <div className="d-flex justify-content-between align-items-center mt-3">
           <div>
-            Displaying {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredUsers.length)} of {filteredUsers.length}
+            Displaying {startIndex + 1}-{Math.min(startIndex + itemsPerPage, totalUsers)} of {totalUsers}
           </div>
           <div className="d-flex align-items-center gap-2">
             <span>Items per page:</span>

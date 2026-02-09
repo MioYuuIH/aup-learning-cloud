@@ -83,8 +83,25 @@ export async function getHubInfo(): Promise<HubInfo> {
 
 // ============ Users API ============
 
-export async function getUsers(offset = 0, limit = 100): Promise<UsersResponse> {
-  return apiRequest<UsersResponse>(`/users?offset=${offset}&limit=${limit}&include_stopped_servers=true`);
+export interface GetUsersOptions {
+  offset?: number;
+  limit?: number;
+  nameFilter?: string;
+  sort?: string;
+  state?: string;
+}
+
+export async function getUsers(options: GetUsersOptions = {}): Promise<UsersResponse> {
+  const { offset = 0, limit = 50, nameFilter = '', sort = '-last_activity', state = '' } = options;
+  const params = new URLSearchParams({
+    offset: String(offset),
+    limit: String(limit),
+    include_stopped_servers: '1',
+    name_filter: nameFilter,
+    sort,
+    state,
+  });
+  return apiRequest<UsersResponse>(`/users?${params.toString()}`);
 }
 
 export async function getUser(username: string): Promise<User> {
