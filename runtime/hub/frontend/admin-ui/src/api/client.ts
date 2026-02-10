@@ -101,7 +101,23 @@ export async function getUsers(options: GetUsersOptions = {}): Promise<UsersResp
     sort,
     state,
   });
-  return apiRequest<UsersResponse>(`/users?${params.toString()}`);
+
+  const baseUrl = getBaseUrl();
+  const url = `${baseUrl}api/users?${params.toString()}`;
+
+  const response = await fetch(url, {
+    headers: {
+      ...getHeaders(),
+      'Accept': 'application/jupyterhub-pagination+json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || `API Error: ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export async function getUser(username: string): Promise<User> {

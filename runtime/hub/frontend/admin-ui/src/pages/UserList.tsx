@@ -29,9 +29,9 @@ import { EditUserModal } from '../components/EditUserModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 // Map frontend sort columns to API sort parameters
+// JupyterHub API only supports: id, name, last_activity
 const sortColumnToApiSort: Record<string, string> = {
   name: 'name',
-  admin: 'admin',
   lastActivity: 'last_activity',
 };
 
@@ -40,6 +40,7 @@ export function UserList() {
   const [users, setUsers] = useState<User[]>([]);
   const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -87,9 +88,11 @@ export function UserList() {
     return onlyActiveServers ? 'active' : '';
   }, [onlyActiveServers]);
 
-  const loadUsers = useCallback(async () => {
+  const loadUsers = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
       const offset = (currentPage - 1) * itemsPerPage;
       const response = await api.getUsers({
@@ -101,10 +104,14 @@ export function UserList() {
       });
       setUsers(response.items || []);
       setTotalUsers(response._pagination?.total || response.items?.length || 0);
+      setInitialLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
+      setInitialLoading(false);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [currentPage, itemsPerPage, debouncedSearch, apiSort, stateFilter]);
 
@@ -237,7 +244,7 @@ export function UserList() {
     try {
       setActionLoading(`start-${user.name}`);
       await api.startServer(user.name);
-      await loadUsers();
+      await loadUsers(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start server');
     } finally {
@@ -249,7 +256,7 @@ export function UserList() {
     try {
       setActionLoading(`stop-${user.name}`);
       await api.stopServer(user.name);
-      await loadUsers();
+      await loadUsers(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to stop server');
     } finally {
@@ -271,7 +278,7 @@ export function UserList() {
       }
     }
     setActionLoading(null);
-    await loadUsers();
+    await loadUsers(true);
   };
 
   const handleStopAll = async () => {
@@ -288,7 +295,7 @@ export function UserList() {
       }
     }
     setActionLoading(null);
-    await loadUsers();
+    await loadUsers(true);
   };
 
   const handleShutdownHub = () => {
@@ -347,7 +354,7 @@ export function UserList() {
       await api.deleteUser(userToDelete.name);
       setShowDeleteModal(false);
       setUserToDelete(null);
-      await loadUsers();
+      await loadUsers(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete user');
     } finally {
@@ -380,7 +387,8 @@ export function UserList() {
     return <Badge bg="secondary">Stopped</Badge>;
   };
 
-  if (loading) {
+  // Only show full-screen spinner on initial load
+  if (initialLoading) {
     return (
       <div className="text-center py-5">
         <Spinner animation="border" role="status">
@@ -453,7 +461,7 @@ export function UserList() {
       )}
 
       {/* Search and Filter */}
-      <div className="d-flex gap-2 mb-3">
+      <div className="d-flex gap-2 mb-3 align-items-center">
         <InputGroup style={{ maxWidth: '400px' }}>
           <InputGroup.Text><i className="bi bi-search"></i></InputGroup.Text>
           <Form.Control
@@ -467,6 +475,7 @@ export function UserList() {
             </Button>
           )}
         </InputGroup>
+        {loading && <Spinner animation="border" size="sm" className="ms-2" />}
 
         <Form.Check
           type="checkbox"
