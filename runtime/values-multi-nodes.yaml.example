@@ -23,7 +23,7 @@
 #   cp values-multi-nodes.yaml.example values-multi-nodes.yaml
 #
 # Deploy with:
-#   helm install jupyterhub ./jupyterhub -n jupyterhub --create-namespace \
+#   helm install jupyterhub ./chart -n jupyterhub --create-namespace \
 #     -f values.yaml -f values-multi-nodes.yaml
 
 # Authentication mode: "auto-login" | "dummy" | "github" | "multi"

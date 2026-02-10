@@ -1,0 +1,5 @@
+# Hub Python dependencies
+jupyterhub-multiauthenticator
+jupyterhub-firstuseauthenticator
+pydantic
+pyyaml

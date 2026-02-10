@@ -58,8 +58,9 @@ rules:
 ignore: |
   node_modules/
   .git/
+  .venv/
   dist/
   # Helm templates use Go templating which isn't valid YAML
-  runtime/jupyterhub/templates/
+  runtime/chart/templates/
   # Generated files
   *.generated.yaml

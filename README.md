@@ -134,7 +134,7 @@ Dynamic NFS provisioning ensures scalable and persistent storage for user data, 
 
 ## Available Notebook Environments
 
-Current environments are set up as `RESOURCE_IMAGES` in `runtime/jupyterhub/files/hub`. These settings should be consistent with `Prepullers` in `runtime/values.yaml`.
+Current environments are set up as `RESOURCE_IMAGES` in `runtime/chart/files/hub`. These settings should be consistent with `Prepullers` in `runtime/values.yaml`.
 
 | Environment | Image                                    | Version | Hardware                        |
 | ----------- | ---------------------------------------- | ------- | ------------------------------- |

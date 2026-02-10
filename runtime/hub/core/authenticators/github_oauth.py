@@ -5,10 +5,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -17,5 +17,28 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""
+GitHub OAuth Authenticator
 
-helm upgrade jupyterhub runtime/chart -n jupyterhub --values runtime/values.yaml 
+Custom GitHub OAuth authenticator with team integration support.
+"""
+
+from __future__ import annotations
+
+from oauthenticator.github import GitHubOAuthenticator
+
+
+class CustomGitHubOAuthenticator(GitHubOAuthenticator):
+    """GitHub OAuth authenticator with access token preservation."""
+
+    name = "github"
+
+    async def authenticate(self, handler, data=None):
+        result = await super().authenticate(handler, data)
+        if not result:
+            return None
+
+        access_token = result["auth_state"]["access_token"]
+        result["auth_state"]["access_token"] = access_token
+
+        return result

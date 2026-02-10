@@ -5,10 +5,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -17,5 +17,30 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""
+core - JupyterHub Business Logic Package
 
-helm upgrade jupyterhub runtime/chart -n jupyterhub --values runtime/values.yaml 
+This package contains all business logic for the JupyterHub deployment,
+installed in the Docker image at /usr/local/lib/core/.
+
+Architecture:
+- jupyterhub_config.py: Main entry point, loaded by JupyterHub
+- z2jh.py: Utilities for reading Helm values
+- config.py: HubConfig singleton for runtime configuration
+- setup.py: Business logic setup (spawner, authenticator, handlers)
+- authenticators/: Authentication classes
+- spawner/: KubeSpawner customization
+- handlers/: HTTP request handlers
+- quota/: Quota management system
+
+The Helm ConfigMap only contains YAML configuration files (resources, accelerators, etc).
+All Python code is in this package.
+"""
+
+from core.config import HubConfig
+from core.setup import setup_hub
+
+__all__ = [
+    "HubConfig",
+    "setup_hub",
+]
