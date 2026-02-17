@@ -31,6 +31,7 @@ import json
 import os
 import re
 import time
+from urllib.parse import urlparse
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -90,6 +91,10 @@ class RemoteLabKubeSpawner(KubeSpawner):
     quota_rates: dict[str, int] = {}
     default_quota: int = 0
     minimum_quota_to_start: int = 10
+
+    # Repository cloning configuration
+    ALLOWED_GIT_PROVIDERS: set[str] = {"github.com", "gitlab.com", "bitbucket.org"}
+    MAX_CLONE_TIMEOUT: int = 300  # seconds
 
     @classmethod
     def configure_from_config(cls, config: HubConfig) -> None:
@@ -323,7 +328,127 @@ class RemoteLabKubeSpawner(KubeSpawner):
             f"User selected resource: {resource_type} with GPU: {gpu_selection} for {runtime_minutes} minutes"
         )
 
+        # Optional repository cloning fields (do not break existing forms)
+        try:
+            repo_url = formdata.get("repo_url", [""])[0].strip()
+        except Exception:
+            repo_url = ""
+
+        try:
+            access_token = formdata.get("access_token", [""])[0].strip()
+        except Exception:
+            access_token = ""
+
+        if repo_url:
+            options["repo_url"] = repo_url
+        if access_token:
+            options["access_token"] = access_token
+
         return options
+
+    def _validate_and_sanitize_repo_url(self, url: str) -> tuple[bool, str, str]:
+        """
+        Validate repository URL and return (is_valid, error_message, sanitized_url).
+        Empty/blank URLs return (True, "", "").
+        """
+        if not url or not str(url).strip():
+            return True, "", ""
+
+        url = str(url).strip()
+
+        # Basic parsing and scheme enforcement
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme and parsed.scheme not in ["http", "https"]:
+                return False, "Only HTTP/HTTPS URLs supported", ""
+            if not parsed.netloc:
+                return False, "Invalid URL format", ""
+        except Exception as e:
+            return False, f"URL parsing error: {e}", ""
+
+        hostname = parsed.netloc.lower()
+        is_whitelisted = any(
+            hostname == provider or hostname.endswith('.' + provider) for provider in self.ALLOWED_GIT_PROVIDERS
+        )
+
+        if not is_whitelisted:
+            return False, f"Repository host '{hostname}' not authorized", ""
+
+        # Reject clearly malicious characters
+        dangerous_patterns = [';', '||', '&&', '$(', '`', '\n', '\r']
+        if any(pat in url for pat in dangerous_patterns):
+            return False, "URL contains suspicious characters", ""
+
+        return True, "", url
+
+    def _build_git_init_container(self, repo_url: str, access_token: str | None = None) -> dict:
+        """
+        Build an init container spec that will clone the given repository into
+        the shared notebook volume. This is conservative and will not raise on
+        failure — the init container exits gracefully when clone fails to avoid
+        blocking the user entirely.
+        """
+        # If access_token provided, expose it to the init container via env var.
+        # Note: In production it's preferable to use Kubernetes Secrets and
+        # reference them here (envFrom / secretRef) instead of embedding tokens.
+        protected_url = repo_url
+
+        clone_script = f'''#!/bin/sh
+set -e
+
+echo "Starting repository clone..."
+
+REPO_URL="{protected_url}"
+CLONE_PATH="/home/jovyan/work"
+
+# Configure Git
+git config --global http.sslVerify true || true
+git config --global user.email "jupyterhub@local" || true
+git config --global user.name "JupyterHub System" || true
+
+mkdir -p "$CLONE_PATH"
+cd "$CLONE_PATH"
+
+# If GIT_ACCESS_TOKEN is present, use it to perform an authenticated shallow clone
+if [ -n "$GIT_ACCESS_TOKEN" ]; then
+  # Insert token into URL for https clones (note: token exposure in pod spec is a risk)
+  if echo "$REPO_URL" | grep -qE "^https://"; then
+    AUTH_URL=$(echo "$REPO_URL" | sed -e "s#^https://#https://$GIT_ACCESS_TOKEN@#")
+    timeout {self.MAX_CLONE_TIMEOUT} git clone --depth 1 "$AUTH_URL" . || {{
+      echo "Clone failed - check URL and credentials"; exit 0; }}
+  else
+    timeout {self.MAX_CLONE_TIMEOUT} git clone --depth 1 "$REPO_URL" . || {{
+      echo "Clone failed - check URL and credentials"; exit 0; }}
+  fi
+else
+  timeout {self.MAX_CLONE_TIMEOUT} git clone --depth 1 "$REPO_URL" . || {{
+    echo "Clone failed - check URL and credentials"; exit 0; }}
+fi
+
+echo "Repository cloned (if available)"
+ls -lah || true
+'''
+
+        init_container = {
+            "name": "init-clone-repo",
+            "image": "alpine/git:2.40.0",
+            "command": ["sh", "-c", clone_script],
+            "volumeMounts": [{"name": "notebook-vol", "mountPath": "/home/jovyan/work"}],
+            "securityContext": {
+                "runAsUser": 1000,
+                "runAsNonRoot": True,
+                "allowPrivilegeEscalation": False,
+            },
+            "resources": {
+                "requests": {"memory": "256Mi", "cpu": "100m"},
+                "limits": {"memory": "512Mi", "cpu": "500m"},
+            },
+        }
+
+        if access_token:
+            init_container.setdefault("env", []).append({"name": "GIT_ACCESS_TOKEN", "value": access_token})
+
+        return init_container
 
     def _parse_memory_string(self, memory_str) -> float:
         """Parse memory string with units like '16Gi' or '512Mi' to float in GB."""
@@ -512,6 +637,41 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 "QUOTA_RATE": str(quota_rate),
             }
         )
+
+        # Prefer a repo URL provided by the frontend only; do not fallback to config
+        try:
+            repo_url = str(self.user_options.get("repo_url", "") or "").strip()
+            access_token = str(self.user_options.get("access_token", "") or "").strip()
+        except Exception:
+            repo_url = ""
+            access_token = ""
+
+        if repo_url:
+            is_valid, err_msg, sanitized_url = self._validate_and_sanitize_repo_url(repo_url)
+            if not is_valid:
+                # Don't block spawn on invalid repo; log and continue
+                self.log.warning(f"Repository URL rejected for user {self.user.name}: {err_msg}")
+            else:
+                # Ensure a shared volume exists for cloning
+                try:
+                    vols = getattr(self, "volumes", None) or []
+                    if not any(v.get("name") == "notebook-vol" for v in vols):
+                        vols = vols + [{"name": "notebook-vol", "emptyDir": {}}]
+                        self.volumes = vols
+
+                    vmounts = getattr(self, "volume_mounts", None) or []
+                    if not any(m.get("name") == "notebook-vol" for m in vmounts):
+                        vmounts = vmounts + [{"name": "notebook-vol", "mountPath": "/home/jovyan/work"}]
+                        self.volume_mounts = vmounts
+
+                    # Build init container and prepend it to existing init_containers
+                    init_container = self._build_git_init_container(sanitized_url, access_token or None)
+                    if getattr(self, "init_containers", None) is None:
+                        self.init_containers = []
+                    self.init_containers = [init_container] + (self.init_containers or [])
+                    self.log.info(f"Configured init container to clone repo for user {self.user.name}: {sanitized_url}")
+                except Exception as e:
+                    self.log.warning(f"Failed to configure repo init container: {e}")
 
         start_result = await super().start()
 

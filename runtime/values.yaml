@@ -108,6 +108,7 @@ custom:
       Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
       Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
       Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
+      # Custom-URL: "ghcr.io/amdresearch/auplc-cv:latest"
 
     # Course Resource Requirements
     # Define resource quotas for each course
@@ -136,6 +137,11 @@ custom:
         memory: "16Gi"
         memory_limit: "24Gi"
         amd.com/gpu: "1"
+      # Custom-URL:
+      #   cpu: "4"
+      #   memory: "16Gi"
+      #   memory_limit: "24Gi"
+      #   amd.com/gpu: "1"
       none:
         cpu: "2"
         memory: "4Gi"
