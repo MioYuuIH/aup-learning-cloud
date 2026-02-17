@@ -1,0 +1,31 @@
+# Docker Build for Testing RemoteLab Hub Core
+#
+# Usage:
+#   docker build -f Dockerfile.test -t auplc-test .
+#   docker run --rm auplc-test
+
+FROM python:3.10-slim
+
+LABEL description="Test environment for AUP Learning Cloud - RemoteLab Hub Core"
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY . /app
+
+# Install test dependencies from requirements-test.txt
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -r requirements-test.txt
+
+# Set PYTHONPATH to include runtime/hub directory
+ENV PYTHONPATH=/app/runtime/hub:$PYTHONPATH
+
+# Default command: run tests
+CMD ["pytest", "runtime/hub/tests/", "-v", "--cov=runtime.hub.core", "--cov-report=html", "--cov-report=term-missing"]
