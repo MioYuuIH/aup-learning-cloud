@@ -141,6 +141,44 @@ custom:
         memory: "4Gi"
         memory_limit: "6Gi"
 
+    # Course Metadata (for spawn UI)
+    # Defines display information for each course
+    metadata:
+      cpu:
+        group: "OTHERS"
+        description: "Basic Python Environment"
+        subDescription: "CPU Only Environment"
+        accelerator: ""
+        acceleratorKeys: []
+      Course-CV:
+        group: "COURSE"
+        description: "Computer Vision Course"
+        subDescription: "Suitable for CV experiments with GPU"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+      Course-DL:
+        group: "COURSE"
+        description: "Deep Learning Course"
+        subDescription: "Suitable for DL experiments with GPU"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+      Course-LLM:
+        group: "COURSE"
+        description: "Large Language Models Course"
+        subDescription: "Suitable for LLM experiments with GPU"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+      Course-PhySim:
+        group: "COURSE"
+        description: "Genesis Physical Simulation Course"
+        subDescription: "Suitable for physical simulation experiments with GPU"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+
   # ============================================================================
   # Team Permission Configuration
   # ============================================================================

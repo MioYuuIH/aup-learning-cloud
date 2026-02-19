@@ -670,6 +670,80 @@ class UserQuotaInfoHandler(APIHandler):
         )
 
 
+class ResourcesAPIHandler(APIHandler):
+    """API endpoint for available resources with metadata."""
+
+    @web.authenticated
+    async def get(self):
+        """Get all available resources with metadata.
+
+        Note: Access control is handled by the spawner via window.AVAILABLE_RESOURCES
+        injected into the template. This API returns all configured resources.
+        """
+        from core.config import HubConfig
+
+        config = HubConfig.get()
+
+        # Return all configured resources - access control is done client-side
+        # based on spawner-injected window.AVAILABLE_RESOURCES
+        available_resources = set(config.resources.images.keys())
+
+        # Build response
+        resources_list = []
+        groups_dict: dict[str, list[dict]] = {}
+
+        for key in sorted(available_resources):
+            image = config.get_resource_image(key)
+            requirements = config.get_resource_requirements(key)
+            metadata = config.get_resource_metadata(key)
+
+            if not image:
+                continue
+
+            resource_data: dict[str, Any] = {
+                "key": key,
+                "image": image,
+                "requirements": requirements.model_dump(by_alias=True, exclude_none=True)
+                if requirements
+                else {"cpu": "2", "memory": "4Gi"},
+            }
+
+            if metadata:
+                resource_data["metadata"] = metadata.model_dump(exclude_none=True)
+                group_name = metadata.group or "OTHERS"
+            else:
+                group_name = "OTHERS"
+
+            resources_list.append(resource_data)
+
+            if group_name not in groups_dict:
+                groups_dict[group_name] = []
+            groups_dict[group_name].append(resource_data)
+
+        # Build groups list - sort alphabetically, but put OTHERS last
+        groups_list = []
+        sorted_group_names = sorted(groups_dict.keys(), key=lambda x: (x == "OTHERS", x))
+        for group_name in sorted_group_names:
+            groups_list.append(
+                {
+                    "name": group_name,
+                    "displayName": group_name.replace("_", " ").title(),
+                    "resources": groups_dict[group_name],
+                }
+            )
+
+        self.set_header("Content-Type", "application/json")
+        self.finish(
+            json.dumps(
+                {
+                    "resources": resources_list,
+                    "groups": groups_list,
+                    "acceleratorKeys": list(config.accelerators.keys()),
+                }
+            )
+        )
+
+
 # =============================================================================
 # Handler Registration
 # =============================================================================
@@ -694,6 +768,8 @@ def get_handlers() -> list[tuple[str, type]]:
         (r"/admin/api/generate-password", AdminAPIGeneratePasswordHandler),
         # Accelerator info API
         (r"/api/accelerators", AcceleratorsAPIHandler),
+        # Resources API
+        (r"/api/resources", ResourcesAPIHandler),
         # Quota management API
         (r"/admin/api/quota/?", QuotaAPIHandler),
         (r"/admin/api/quota/batch", QuotaBatchAPIHandler),
@@ -721,6 +797,7 @@ __all__ = [
     "AcceleratorsAPIHandler",
     "QuotaRatesAPIHandler",
     "UserQuotaInfoHandler",
+    "ResourcesAPIHandler",
     # Configuration
     "configure_handlers",
     # Registration

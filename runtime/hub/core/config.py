@@ -85,11 +85,24 @@ class QuotaSettings(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class ResourceMetadata(BaseModel):
+    """Metadata for a resource (course/tutorial)."""
+
+    group: str = "OTHERS"
+    description: str = ""
+    subDescription: str = ""
+    accelerator: str = ""
+    acceleratorKeys: list[str] = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}
+
+
 class ResourcesConfig(BaseModel):
-    """Resources configuration (images and requirements)."""
+    """Resources configuration (images, requirements, and metadata)."""
 
     images: dict[str, str] = Field(default_factory=dict)
     requirements: dict[str, ResourceRequirements] = Field(default_factory=dict)
+    metadata: dict[str, ResourceMetadata] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}
 
@@ -286,6 +299,10 @@ class HubConfig:
     def get_resource_requirements(self, resource_type: str) -> ResourceRequirements | None:
         """Get resource requirements for a resource type."""
         return self._config.resources.requirements.get(resource_type)
+
+    def get_resource_metadata(self, resource_type: str) -> ResourceMetadata | None:
+        """Get metadata for a resource type."""
+        return self._config.resources.metadata.get(resource_type)
 
     def get_accelerator_node_selector(self, accelerator_key: str) -> dict[str, str]:
         """Get node selector for an accelerator type."""
