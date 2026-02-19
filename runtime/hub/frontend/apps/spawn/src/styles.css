@@ -1,0 +1,332 @@
+/* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+/* ========== Original Spawn UI Styles ========== */
+:root {
+    --dark-bg-primary: #212529;
+    --dark-bg-secondary: #2b3035;
+    --dark-bg-tertiary: #343a40;
+    --dark-border: #495057;
+    --dark-text-primary: #e9ecef;
+    --dark-text-secondary: #adb5bd;
+    --dark-text-muted: #6c757d;
+}
+
+/* Main container */
+[data-bs-theme="dark"] #spawn-root { background: var(--dark-bg-secondary) !important; }
+
+/* Resource container */
+[data-bs-theme="dark"] .resource-container { background: var(--dark-bg-secondary) !important; border-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .resource-container:hover { background-color: var(--dark-bg-tertiary) !important; }
+[data-bs-theme="dark"] .resource-container.selected { background-color: var(--dark-bg-tertiary) !important; border-color: var(--dark-text-secondary) !important; box-shadow: 0 0 0 1px var(--dark-text-secondary) !important; }
+[data-bs-theme="dark"] .resource-container strong { color: var(--dark-text-primary) !important; }
+[data-bs-theme="dark"] .env-desc { color: var(--dark-text-secondary) !important; }
+[data-bs-theme="dark"] .dot { color: var(--dark-text-muted) !important; }
+[data-bs-theme="dark"] .resource-tag { background: var(--dark-bg-tertiary) !important; border-color: var(--dark-border) !important; color: var(--dark-text-primary) !important; }
+
+/* Category section */
+[data-bs-theme="dark"] .resource-category { border-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .resource-category-header { background: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; border-bottom-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .resource-category-header:hover { background: linear-gradient(to right, var(--dark-bg-tertiary), #3d444b) !important; }
+[data-bs-theme="dark"] .resource-category-header h5 { color: var(--dark-text-primary) !important; }
+[data-bs-theme="dark"] .collapse-icon { color: var(--dark-text-primary) !important; }
+[data-bs-theme="dark"] .collapsible-content { background: var(--dark-bg-secondary) !important; }
+
+/* GPU selection */
+[data-bs-theme="dark"] .gpu-selection { background: var(--dark-bg-secondary) !important; border-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .gpu-selection h6 { color: var(--dark-text-primary) !important; border-bottom-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .gpu-option { background: var(--dark-bg-tertiary) !important; border-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .gpu-option:hover { background: #3d444b !important; border-color: var(--dark-text-secondary) !important; }
+[data-bs-theme="dark"] .gpu-option.selected { background: #3d444b !important; border-color: var(--dark-text-secondary) !important; box-shadow: 0 0 0 1px var(--dark-text-secondary) !important; }
+[data-bs-theme="dark"] .gpu-option-name { color: var(--dark-text-primary) !important; }
+[data-bs-theme="dark"] .gpu-option-desc { color: var(--dark-text-secondary) !important; }
+
+/* Runtime section */
+[data-bs-theme="dark"] .runtime-container { border-top-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .runtime-container label { color: var(--dark-text-primary) !important; }
+[data-bs-theme="dark"] .runtime-container input { background: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; border-color: var(--dark-border) !important; }
+
+/* Launch section */
+[data-bs-theme="dark"] .launch-button { background: var(--dark-text-primary) !important; color: var(--dark-bg-primary) !important; }
+[data-bs-theme="dark"] .launch-button:hover:not(:disabled) { background: #ffffff !important; }
+[data-bs-theme="dark"] .quota-display-simple { color: var(--dark-text-secondary) !important; }
+[data-bs-theme="dark"] .quota-cost-preview { color: var(--dark-text-secondary) !important; }
+
+/* Warning box */
+[data-bs-theme="dark"] .warning-box { background: #4a3f2a !important; border-color: #6b5c3a !important; color: #ffc107 !important; }
+
+/* Loading spinner */
+[data-bs-theme="dark"] .loading-spinner { color: var(--dark-text-secondary) !important; }
+[data-bs-theme="dark"] .spinner-icon { border-color: var(--dark-border) !important; border-top-color: var(--dark-text-primary) !important; }
+
+#spawn-root {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 25px;
+    background: #f8f9fa;
+    border-radius: 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.resource-category {
+    margin-bottom: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.resource-category-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #f8f9fa;
+    cursor: pointer;
+    border-bottom: 1px solid #e0e0e0;
+    transition: background 0.2s;
+}
+
+.resource-category-header:hover {
+    background: linear-gradient(to right, #eef1f5, #e8ecf2);
+}
+
+.resource-category-header h5 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.collapse-icon {
+    font-size: 16px;
+    transition: transform 0.2s ease;
+    color: #2c3e50;
+}
+
+.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.collapsible-content {
+    max-height: 2000px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+    background: #ffffff;
+    padding: 20px;
+}
+
+.collapsed .collapsible-content {
+    max-height: 0;
+    padding: 0 20px;
+}
+
+.resource-container {
+    margin-bottom: 14px;
+    padding: 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.resource-container:hover {
+    background-color: #f9fafb;
+}
+
+.resource-container.selected {
+    background-color: #f5f7fa;
+    border-color: #2c3e50;
+    box-shadow: 0 0 0 1px #2c3e50;
+}
+
+.resource-container input[type="radio"] {
+    margin-right: 15px;
+    width: 16px;
+    height: 16px;
+    accent-color: #6c7a89;
+}
+
+.resource-container strong {
+    display: block;
+    font-size: 15px;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.env-desc { color: #34495e; }
+.dot { color: #95a5a6; }
+.resource-tag {
+    color: #2c3e50;
+    background: #e8e8e8;
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid #d0d0d0;
+    font-size: 13px;
+}
+
+.gpu-selection {
+    margin-top: 15px;
+    margin-left: 40px;
+    padding: 18px;
+    background: #ffffff;
+    border: 1px solid #e5e9f0;
+    border-radius: 12px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.06);
+}
+
+.gpu-selection h6 {
+    color: #2e3440;
+    font-size: 1rem;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #ebecf0;
+    font-weight: 600;
+}
+
+.gpu-options-container {
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.gpu-option {
+    margin: 10px 0;
+    padding: 14px 16px;
+    background: #f8f9fc;
+    border: 1px solid #e5e9f0;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gpu-option:hover {
+    background: #eceff4;
+    border-color: #2c3e50;
+}
+
+.gpu-option.selected {
+    background: #e5e9f0;
+    border-color: #2c3e50;
+    box-shadow: 0 0 0 1px #2c3e50;
+}
+
+.gpu-option input[type="radio"] {
+    margin-right: 12px;
+    width: 18px;
+    height: 18px;
+    accent-color: #2c3e50;
+}
+
+.gpu-option-details { flex: 1; }
+.gpu-option-name { font-weight: 600; color: #2e3440; margin-bottom: 4px; font-size: 0.95rem; }
+.gpu-option-desc { font-size: 0.85rem; color: #4c566a; line-height: 1.4; }
+
+.runtime-container {
+    margin-top: 30px;
+    padding-top: 25px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.runtime-container label {
+    color: #2c3e50;
+    margin-right: 15px;
+    font-weight: 500;
+}
+
+.runtime-container input[type="number"] {
+    width: 120px;
+    padding: 10px 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #2c3e50;
+}
+
+.quota-cost-preview {
+    margin-left: 20px;
+    font-size: 14px;
+}
+
+.launch-section {
+    margin-top: 25px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.launch-button {
+    padding: 10px 20px;
+    font-weight: 500;
+    border-radius: 8px;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.launch-button:hover:not(:disabled) {
+    background: #1a252f;
+}
+
+.launch-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.quota-display-simple { font-size: 14px; color: #666; }
+
+.warning-box {
+    padding: 15px 20px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    color: #856404;
+    margin-bottom: 20px;
+}
+
+.loading-spinner {
+    text-align: center;
+    padding: 40px;
+    color: #4c566a;
+}
+
+.spinner-icon {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e5e9f0;
+    border-radius: 50%;
+    border-top-color: #2c3e50;
+    animation: spin 1s ease-in-out infinite;
+    margin-right: 12px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.feedback-container { display: none !important; }
