@@ -17,9 +17,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import { dirname } from 'path'
+import { fileURLToPath } from 'url'
 import js from '@eslint/js'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 export default tseslint.config(
   { ignores: ['dist'] },
@@ -29,6 +33,9 @@ export default tseslint.config(
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+      parserOptions: {
+        tsconfigRootDir: __dirname,
+      },
     },
   },
 )
