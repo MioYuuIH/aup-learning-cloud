@@ -17,30 +17,37 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { Container } from 'react-bootstrap';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { UserList } from './pages/UserList';
-import { GroupList } from './pages/GroupList';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css';
-
-function App() {
-  // Get base URL from window.jhdata (set by JupyterHub)
-  const jhdata = window.jhdata ?? {};
-  const baseUrl = (jhdata.base_url || '/hub/').replace(/\/+$/, ''); // Remove trailing slash
-  const basePath = `${baseUrl}/admin`;
-
-  return (
-    <BrowserRouter basename={basePath}>
-      <Container className="py-4">
-        <Routes>
-          <Route path="/users" element={<UserList />} />
-          <Route path="/groups" element={<GroupList />} />
-          <Route path="/" element={<Navigate to="/users" replace />} />
-        </Routes>
-      </Container>
-    </BrowserRouter>
-  );
+export interface UserQuota {
+  username: string;
+  balance: number;
+  unlimited?: boolean | number;
+  updated_at?: string;
+  recent_transactions?: QuotaTransaction[];
 }
 
-export default App;
+export interface QuotaTransaction {
+  id: number;
+  username: string;
+  amount: number;
+  transaction_type: string;
+  resource_type?: string;
+  description?: string;
+  balance_before: number;
+  balance_after: number;
+  created_at: string;
+  created_by?: string;
+}
+
+export interface QuotaRates {
+  rates: Record<string, number>;
+  minimum_to_start: number;
+  enabled: boolean;
+}
+
+export interface UserQuotaInfo {
+  username: string;
+  balance: number;
+  unlimited: boolean;
+  rates: Record<string, number>;
+  enabled: boolean;
+}

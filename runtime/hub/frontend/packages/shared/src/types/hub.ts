@@ -17,67 +17,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// JupyterHub User type
-export interface User {
-  name: string;
-  admin: boolean;
-  groups: string[];
-  server: string | null;
-  pending: string | null;
-  last_activity: string | null;
-  created: string | null;
-  auth_state?: Record<string, unknown>;
-  servers?: Record<string, Server>;
-}
-
-// Server information
-export interface Server {
-  name: string;
-  ready: boolean;
-  pending: string | null;
-  url: string;
-  progress_url: string;
-  started: string | null;
-  last_activity: string | null;
-  state: Record<string, unknown>;
-  user_options: Record<string, unknown>;
-}
-
-// API response for user list
-export interface UsersResponse {
-  items: User[];
-  _pagination: {
-    offset: number;
-    limit: number;
-    total: number;
-    next: {
-      offset: number;
-      limit: number;
-      url: string;
-    } | null;
-  };
-}
-
-// Create user request
-export interface CreateUserRequest {
-  usernames: string[];
-  admin?: boolean;
-}
-
-// Password set request (custom endpoint)
-export interface SetPasswordRequest {
-  username: string;
-  password: string;
-  force_change?: boolean;
-}
-
-// API Error response
-export interface ApiError {
-  status: number;
-  message: string;
-}
-
-// Hub info
 export interface HubInfo {
   version: string;
   python: string;
@@ -92,14 +31,11 @@ export interface HubInfo {
   };
 }
 
-// Group type
-export interface Group {
-  name: string;
-  users: string[];
-  properties: Record<string, unknown>;
+export interface ApiError {
+  status: number;
+  message: string;
 }
 
-// JupyterHub data injected into window by the server
 export interface JHData {
   base_url?: string;
   prefix?: string;
@@ -108,7 +44,6 @@ export interface JHData {
   xsrf_token?: string;
 }
 
-// Extend Window interface to include jhdata
 declare global {
   interface Window {
     jhdata?: JHData;

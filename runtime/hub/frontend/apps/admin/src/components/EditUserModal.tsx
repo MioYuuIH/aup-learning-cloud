@@ -19,8 +19,8 @@
 
 import { useState, useEffect } from 'react';
 import { Modal, Button, Badge, Alert, Form, InputGroup } from 'react-bootstrap';
-import type { User, Group } from '../types';
-import * as api from '../api/client';
+import type { User, Group } from '@auplc/shared';
+import * as api from '@auplc/shared';
 
 interface Props {
   show: boolean;

@@ -17,12 +17,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, Form, InputGroup, Badge, Spinner, Alert, ButtonGroup, Modal } from 'react-bootstrap';
-import type { User } from '../types';
-import * as api from '../api/client';
-import type { UserQuota } from '../api/client';
+import type { User, UserQuota, Server } from '@auplc/shared';
+import * as api from '@auplc/shared';
 import { CreateUserModal } from '../components/CreateUserModal';
 import { SetPasswordModal } from '../components/SetPasswordModal';
 import { EditUserModal } from '../components/EditUserModal';
@@ -34,6 +33,327 @@ const sortColumnToApiSort: Record<string, string> = {
   name: 'name',
   lastActivity: 'last_activity',
 };
+
+// Utility functions moved outside component to avoid recreation on each render
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+}
+
+function getServerStatusBadge(user: User): React.ReactNode {
+  if (user.pending) {
+    return <Badge bg="warning">{user.pending}</Badge>;
+  }
+  if (user.server) {
+    return <Badge bg="success">Running</Badge>;
+  }
+  return <Badge bg="secondary">Stopped</Badge>;
+}
+
+function isNativeUser(user: User): boolean {
+  return !user.name.startsWith('github:');
+}
+
+// Memoized SortIcon component
+const SortIcon = memo(function SortIcon({ column, sortColumn, sortDirection }: {
+  column: string;
+  sortColumn: string;
+  sortDirection: 'asc' | 'desc';
+}) {
+  if (!sortColumnToApiSort[column]) return null;
+  if (sortColumn !== column) return <span style={{ opacity: 0.3 }}> ↕</span>;
+  return <span> {sortDirection === 'asc' ? '↑' : '↓'}</span>;
+});
+
+// Memoized UserRow component to prevent unnecessary re-renders
+interface UserRowProps {
+  user: User;
+  quotaEnabled: boolean;
+  quotaMap: Map<string, UserQuota>;
+  selectedUsers: Set<string>;
+  expandedUsers: Set<string>;
+  editingQuota: string | null;
+  quotaInput: string;
+  actionLoading: string | null;
+  baseUrl: string;
+  onToggleSelection: (username: string) => void;
+  onToggleExpand: (username: string) => void;
+  onQuotaEdit: (username: string, balance: number, isUnlimited: boolean) => void;
+  onQuotaInputChange: (value: string) => void;
+  onQuotaSave: (username: string) => void;
+  onQuotaCancel: () => void;
+  onStartServer: (user: User) => void;
+  onStopServer: (user: User) => void;
+  onEditUser: (user: User) => void;
+  onPasswordReset: (user: User) => void;
+  onDeleteUser: (user: User) => void;
+}
+
+const UserRow = memo(function UserRow({
+  user,
+  quotaEnabled,
+  quotaMap,
+  selectedUsers,
+  expandedUsers,
+  editingQuota,
+  quotaInput,
+  actionLoading,
+  baseUrl,
+  onToggleSelection,
+  onToggleExpand,
+  onQuotaEdit,
+  onQuotaInputChange,
+  onQuotaSave,
+  onQuotaCancel,
+  onStartServer,
+  onStopServer,
+  onEditUser,
+  onPasswordReset,
+  onDeleteUser,
+}: UserRowProps) {
+  const isExpanded = expandedUsers.has(user.name);
+  const isSelected = selectedUsers.has(user.name);
+  const quota = quotaMap.get(user.name);
+  const isEditingThisQuota = editingQuota === user.name;
+
+  return (
+    <React.Fragment>
+      <tr>
+        <td>
+          <Button
+            variant="link"
+            size="sm"
+            className="p-0"
+            onClick={() => onToggleExpand(user.name)}
+            style={{ textDecoration: 'none' }}
+          >
+            {isExpanded ? '▼' : '▶'}
+          </Button>
+        </td>
+        <td>
+          <Form.Check
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelection(user.name)}
+          />
+        </td>
+        <td>
+          {user.name}
+          {user.name.startsWith('github:') && (
+            <Badge bg="info" className="ms-2">GitHub</Badge>
+          )}
+        </td>
+        <td>
+          {user.admin ? (
+            <Badge bg="success">Admin</Badge>
+          ) : (
+            <Badge bg="secondary">User</Badge>
+          )}
+        </td>
+        {quotaEnabled && (
+          <td>
+            {isEditingThisQuota ? (
+              <InputGroup size="sm" style={{ width: '100px' }}>
+                <Form.Control
+                  type="text"
+                  value={quotaInput}
+                  placeholder="∞ for unlimited"
+                  onChange={(e) => onQuotaInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onQuotaSave(user.name);
+                    if (e.key === 'Escape') onQuotaCancel();
+                  }}
+                  autoFocus
+                />
+                <Button
+                  variant="success"
+                  size="sm"
+                  onClick={() => onQuotaSave(user.name)}
+                  disabled={actionLoading === `quota-${user.name}`}
+                >
+                  {actionLoading === `quota-${user.name}` ? <Spinner animation="border" size="sm" /> : '✓'}
+                </Button>
+              </InputGroup>
+            ) : (
+              <span
+                style={{ cursor: 'pointer', fontWeight: 500 }}
+                className={
+                  quota?.unlimited
+                    ? 'text-success'
+                    : (quota?.balance ?? 0) < 10
+                      ? 'text-danger'
+                      : ''
+                }
+                onClick={() => onQuotaEdit(user.name, quota?.balance ?? 0, quota?.unlimited === true)}
+                title="Click to edit (-1 or ∞ for unlimited)"
+              >
+                {quota?.unlimited ? '∞' : (quota?.balance ?? 0)}
+              </span>
+            )}
+          </td>
+        )}
+        <td>{getServerStatusBadge(user)}</td>
+        <td>{formatDate(user.last_activity)}</td>
+        <td>
+          <ButtonGroup size="sm">
+            {user.server ? (
+              <Button
+                variant="dark"
+                onClick={() => onStopServer(user)}
+                disabled={actionLoading === `stop-${user.name}`}
+                title="Stop Server"
+              >
+                {actionLoading === `stop-${user.name}` ? (
+                  <Spinner animation="border" size="sm" />
+                ) : (
+                  'Stop Server'
+                )}
+              </Button>
+            ) : (
+              <Button
+                variant="dark"
+                onClick={() => onStartServer(user)}
+                disabled={actionLoading === `start-${user.name}` || !!user.pending}
+                title="Start Server"
+              >
+                {actionLoading === `start-${user.name}` ? (
+                  <Spinner animation="border" size="sm" />
+                ) : (
+                  'Start Server'
+                )}
+              </Button>
+            )}
+
+            <Button
+              variant="light"
+              as="a"
+              href={`${baseUrl}spawn/${user.name}`}
+              title="Spawn Page"
+            >
+              Spawn Page
+            </Button>
+
+            <Button
+              variant="light"
+              onClick={() => onEditUser(user)}
+              title="Edit User"
+            >
+              Edit User
+            </Button>
+
+            {isNativeUser(user) && user.name !== 'admin' && (
+              <Button
+                variant="light"
+                onClick={() => onPasswordReset(user)}
+                title="Reset Password"
+              >
+                <i className="bi bi-key"></i> Reset PW
+              </Button>
+            )}
+            {user.name !== 'admin' && (
+              <Button
+                variant="outline-danger"
+                onClick={() => onDeleteUser(user)}
+                title="Delete User"
+                disabled={actionLoading === `delete-${user.name}`}
+              >
+                {actionLoading === `delete-${user.name}` ? (
+                  <Spinner animation="border" size="sm" />
+                ) : (
+                  'Delete'
+                )}
+              </Button>
+            )}
+          </ButtonGroup>
+        </td>
+      </tr>
+      {/* Expanded User Details */}
+      {isExpanded && (
+        <tr>
+          <td colSpan={quotaEnabled ? 8 : 7} className="bg-body-secondary">
+            <UserExpandedDetails user={user} />
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
+  );
+});
+
+// Memoized expanded details component
+const UserExpandedDetails = memo(function UserExpandedDetails({ user }: { user: User }) {
+  return (
+    <div className="d-flex gap-4 p-2">
+      {/* User Info */}
+      <div style={{ flex: 1 }}>
+        <h6 className="mb-2">User</h6>
+        <table className="table table-sm table-bordered mb-0" style={{ fontSize: '0.85em' }}>
+          <tbody>
+            <tr><td style={{ width: '140px' }}><strong>admin</strong></td><td>{user.admin ? 'true' : 'false'}</td></tr>
+            <tr><td><strong>auth_state</strong></td><td>{user.auth_state && Object.keys(user.auth_state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(user.auth_state, null, 2)}</pre> : ''}</td></tr>
+            <tr><td><strong>created</strong></td><td>{user.created || ''}</td></tr>
+            <tr><td><strong>groups</strong></td><td>{user.groups?.join(', ') || ''}</td></tr>
+            <tr><td><strong>kind</strong></td><td>user</td></tr>
+            <tr><td><strong>last_activity</strong></td><td>{user.last_activity || ''}</td></tr>
+            <tr><td><strong>name</strong></td><td>{user.name}</td></tr>
+            <tr><td><strong>pending</strong></td><td>{user.pending || ''}</td></tr>
+            <tr><td><strong>roles</strong></td><td><Badge bg="secondary">user</Badge></td></tr>
+            <tr><td><strong>server</strong></td><td>{user.server || ''}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      {/* Server Info */}
+      <div style={{ flex: 1 }}>
+        <h6 className="mb-2">Server</h6>
+        {user.servers && Object.keys(user.servers).length > 0 ? (
+          <table className="table table-sm table-bordered mb-0" style={{ fontSize: '0.85em' }}>
+            <tbody>
+              {Object.entries(user.servers).map(([serverName, server]) => (
+                <ServerDetails key={serverName} serverName={serverName} server={server as Server} userName={user.name} />
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-muted mb-0" style={{ fontSize: '0.85em' }}>No server running</p>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// Memoized server details component
+const ServerDetails = memo(function ServerDetails({ serverName, server, userName }: {
+  serverName: string;
+  server: Server;
+  userName: string;
+}) {
+  return (
+    <React.Fragment>
+      <tr><td style={{ width: '140px' }}><strong>full_name</strong></td><td>{userName}/{serverName || ''}</td></tr>
+      <tr><td><strong>full_progress_url</strong></td><td></td></tr>
+      <tr><td><strong>full_url</strong></td><td></td></tr>
+      <tr><td><strong>last_activity</strong></td><td>{server.last_activity || ''}</td></tr>
+      <tr><td><strong>name</strong></td><td>{serverName}</td></tr>
+      <tr><td><strong>pending</strong></td><td>{server.pending || ''}</td></tr>
+      <tr><td><strong>progress_url</strong></td><td>{server.progress_url || ''}</td></tr>
+      <tr><td><strong>ready</strong></td><td>{server.ready ? 'true' : 'false'}</td></tr>
+      <tr><td><strong>started</strong></td><td>{server.started || ''}</td></tr>
+      <tr><td><strong>state</strong></td><td>{server.state && Object.keys(server.state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.state, null, 2)}</pre> : ''}</td></tr>
+      <tr><td><strong>stopped</strong></td><td>{!server.ready ? 'true' : 'false'}</td></tr>
+      <tr><td><strong>url</strong></td><td>{server.url || ''}</td></tr>
+      <tr><td><strong>user_options</strong></td><td>{server.user_options && Object.keys(server.user_options).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.user_options, null, 2)}</pre> : ''}</td></tr>
+    </React.Fragment>
+  );
+});
 
 export function UserList() {
   const navigate = useNavigate();
@@ -230,15 +550,34 @@ export function UserList() {
   const totalPages = Math.ceil(totalUsers / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
 
-  // Sort indicator helper - only show for sortable columns
-  const SortIcon = ({ column }: { column: typeof sortColumn }) => {
-    if (!sortColumnToApiSort[column]) return null;
-    if (sortColumn !== column) return <span style={{ opacity: 0.3 }}> ↕</span>;
-    return <span> {sortDirection === 'asc' ? '↑' : '↓'}</span>;
-  };
+  // Memoized callbacks to prevent unnecessary re-renders
+  const handleToggleSelection = useCallback((username: string) => {
+    setSelectedUsers(prev => {
+      const newSelected = new Set(prev);
+      if (newSelected.has(username)) {
+        newSelected.delete(username);
+      } else {
+        newSelected.add(username);
+      }
+      return newSelected;
+    });
+  }, []);
 
-  // Filter out GitHub users for password operations
-  const isNativeUser = (user: User) => !user.name.startsWith('github:');
+  const handleToggleExpand = useCallback((username: string) => {
+    setExpandedUsers(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(username)) {
+        newExpanded.delete(username);
+      } else {
+        newExpanded.add(username);
+      }
+      return newExpanded;
+    });
+  }, []);
+
+  const handleQuotaInputChange = useCallback((value: string) => {
+    setQuotaInput(value);
+  }, []);
 
   const handleStartServer = async (user: User) => {
     try {
@@ -304,48 +643,30 @@ export function UserList() {
     }
   };
 
-  const toggleUserSelection = (username: string) => {
-    const newSelected = new Set(selectedUsers);
-    if (newSelected.has(username)) {
-      newSelected.delete(username);
-    } else {
-      newSelected.add(username);
-    }
-    setSelectedUsers(newSelected);
-  };
+  const toggleSelectAll = useCallback(() => {
+    setSelectedUsers(prev => {
+      if (prev.size === users.length) {
+        return new Set();
+      } else {
+        return new Set(users.map(u => u.name));
+      }
+    });
+  }, [users]);
 
-  const toggleSelectAll = () => {
-    if (selectedUsers.size === users.length) {
-      setSelectedUsers(new Set());
-    } else {
-      setSelectedUsers(new Set(users.map(u => u.name)));
-    }
-  };
-
-  const openPasswordModal = (user: User) => {
+  const openPasswordModal = useCallback((user: User) => {
     setSelectedUser(user);
     setShowPasswordModal(true);
-  };
+  }, []);
 
-  const openEditModal = (user: User) => {
+  const openEditModal = useCallback((user: User) => {
     setSelectedUser(user);
     setShowEditModal(true);
-  };
+  }, []);
 
-  const toggleUserExpand = (username: string) => {
-    const newExpanded = new Set(expandedUsers);
-    if (newExpanded.has(username)) {
-      newExpanded.delete(username);
-    } else {
-      newExpanded.add(username);
-    }
-    setExpandedUsers(newExpanded);
-  };
-
-  const openDeleteModal = (user: User) => {
+  const openDeleteModal = useCallback((user: User) => {
     setUserToDelete(user);
     setShowDeleteModal(true);
-  };
+  }, []);
 
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
@@ -362,30 +683,14 @@ export function UserList() {
     }
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
+  // Memoize start/stop server handlers with useCallback
+  const handleStartServerCallback = useCallback((user: User) => {
+    handleStartServer(user);
+  }, []);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-  };
-
-  const getServerStatus = (user: User) => {
-    if (user.pending) {
-      return <Badge bg="warning">{user.pending}</Badge>;
-    }
-    if (user.server) {
-      return <Badge bg="success">Running</Badge>;
-    }
-    return <Badge bg="secondary">Stopped</Badge>;
-  };
+  const handleStopServerCallback = useCallback((user: User) => {
+    handleStopServer(user);
+  }, []);
 
   // Only show full-screen spinner on initial load
   if (initialLoading) {
@@ -502,10 +807,10 @@ export function UserList() {
               />
             </th>
             <th style={{ cursor: 'pointer' }} onClick={() => handleSort('name')}>
-              User<SortIcon column="name" />
+              User<SortIcon column="name" sortColumn={sortColumn} sortDirection={sortDirection} />
             </th>
             <th style={{ cursor: 'pointer' }} onClick={() => handleSort('admin')}>
-              Admin<SortIcon column="admin" />
+              Admin<SortIcon column="admin" sortColumn={sortColumn} sortDirection={sortDirection} />
             </th>
             {quotaEnabled && (
               <th style={{ width: '120px' }}>
@@ -516,224 +821,36 @@ export function UserList() {
               Server
             </th>
             <th style={{ cursor: 'pointer' }} onClick={() => handleSort('lastActivity')}>
-              Last Activity<SortIcon column="lastActivity" />
+              Last Activity<SortIcon column="lastActivity" sortColumn={sortColumn} sortDirection={sortDirection} />
             </th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {users.map((user) => (
-            <React.Fragment key={user.name}>
-            <tr>
-              <td>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="p-0"
-                  onClick={() => toggleUserExpand(user.name)}
-                  style={{ textDecoration: 'none' }}
-                >
-                  {expandedUsers.has(user.name) ? '▼' : '▶'}
-                </Button>
-              </td>
-              <td>
-                <Form.Check
-                  type="checkbox"
-                  checked={selectedUsers.has(user.name)}
-                  onChange={() => toggleUserSelection(user.name)}
-                />
-              </td>
-              <td>
-                {user.name}
-                {user.name.startsWith('github:') && (
-                  <Badge bg="info" className="ms-2">GitHub</Badge>
-                )}
-              </td>
-              <td>
-                {user.admin ? (
-                  <Badge bg="success">Admin</Badge>
-                ) : (
-                  <Badge bg="secondary">User</Badge>
-                )}
-              </td>
-              {quotaEnabled && (
-                <td>
-                  {editingQuota === user.name ? (
-                    <InputGroup size="sm" style={{ width: '100px' }}>
-                      <Form.Control
-                        type="text"
-                        value={quotaInput}
-                        placeholder="∞ for unlimited"
-                        onChange={(e) => setQuotaInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleQuotaSave(user.name);
-                          if (e.key === 'Escape') handleQuotaCancel();
-                        }}
-                        autoFocus
-                      />
-                      <Button
-                        variant="success"
-                        size="sm"
-                        onClick={() => handleQuotaSave(user.name)}
-                        disabled={actionLoading === `quota-${user.name}`}
-                      >
-                        {actionLoading === `quota-${user.name}` ? <Spinner animation="border" size="sm" /> : '✓'}
-                      </Button>
-                    </InputGroup>
-                  ) : (
-                    <span
-                      style={{ cursor: 'pointer', fontWeight: 500 }}
-                      className={
-                        quotaMap.get(user.name)?.unlimited
-                          ? 'text-success'
-                          : (quotaMap.get(user.name)?.balance ?? 0) < 10
-                            ? 'text-danger'
-                            : ''
-                      }
-                      onClick={() => handleQuotaEdit(user.name, quotaMap.get(user.name)?.balance ?? 0, quotaMap.get(user.name)?.unlimited === true)}
-                      title="Click to edit (-1 or ∞ for unlimited)"
-                    >
-                      {quotaMap.get(user.name)?.unlimited ? (
-                        '∞'
-                      ) : (
-                        quotaMap.get(user.name)?.balance ?? 0
-                      )}
-                    </span>
-                  )}
-                </td>
-              )}
-              <td>{getServerStatus(user)}</td>
-              <td>{formatDate(user.last_activity)}</td>
-              <td>
-                <ButtonGroup size="sm">
-                  {user.server ? (
-                    <Button
-                      variant="dark"
-                      onClick={() => handleStopServer(user)}
-                      disabled={actionLoading === `stop-${user.name}`}
-                      title="Stop Server"
-                    >
-                      {actionLoading === `stop-${user.name}` ? (
-                        <Spinner animation="border" size="sm" />
-                      ) : (
-                        'Stop Server'
-                      )}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="dark"
-                      onClick={() => handleStartServer(user)}
-                      disabled={actionLoading === `start-${user.name}` || !!user.pending}
-                      title="Start Server"
-                    >
-                      {actionLoading === `start-${user.name}` ? (
-                        <Spinner animation="border" size="sm" />
-                      ) : (
-                        'Start Server'
-                      )}
-                    </Button>
-                  )}
-
-                  <Button
-                    variant="light"
-                    as="a"
-                    href={`${baseUrl}spawn/${user.name}`}
-                    title="Spawn Page"
-                  >
-                    Spawn Page
-                  </Button>
-
-                  <Button
-                    variant="light"
-                    onClick={() => openEditModal(user)}
-                    title="Edit User"
-                  >
-                    Edit User
-                  </Button>
-
-                  {isNativeUser(user) && user.name !== 'admin' && (
-                    <Button
-                      variant="light"
-                      onClick={() => openPasswordModal(user)}
-                      title="Reset Password"
-                    >
-                      <i className="bi bi-key"></i> Reset PW
-                    </Button>
-                  )}
-                  {user.name !== 'admin' && (
-                    <Button
-                      variant="outline-danger"
-                      onClick={() => openDeleteModal(user)}
-                      title="Delete User"
-                      disabled={actionLoading === `delete-${user.name}`}
-                    >
-                      {actionLoading === `delete-${user.name}` ? (
-                        <Spinner animation="border" size="sm" />
-                      ) : (
-                        'Delete'
-                      )}
-                    </Button>
-                  )}
-                </ButtonGroup>
-              </td>
-            </tr>
-            {/* Expanded User Details */}
-            {expandedUsers.has(user.name) && (
-              <tr>
-                <td colSpan={quotaEnabled ? 8 : 7} className="bg-body-secondary">
-                  <div className="d-flex gap-4 p-2">
-                    {/* User Info */}
-                    <div style={{ flex: 1 }}>
-                      <h6 className="mb-2">User</h6>
-                      <table className="table table-sm table-bordered mb-0" style={{ fontSize: '0.85em' }}>
-                        <tbody>
-                          <tr><td style={{ width: '140px' }}><strong>admin</strong></td><td>{user.admin ? 'true' : 'false'}</td></tr>
-                          <tr><td><strong>auth_state</strong></td><td>{user.auth_state && Object.keys(user.auth_state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(user.auth_state, null, 2)}</pre> : ''}</td></tr>
-                          <tr><td><strong>created</strong></td><td>{user.created || ''}</td></tr>
-                          <tr><td><strong>groups</strong></td><td>{user.groups?.join(', ') || ''}</td></tr>
-                          <tr><td><strong>kind</strong></td><td>user</td></tr>
-                          <tr><td><strong>last_activity</strong></td><td>{user.last_activity || ''}</td></tr>
-                          <tr><td><strong>name</strong></td><td>{user.name}</td></tr>
-                          <tr><td><strong>pending</strong></td><td>{user.pending || ''}</td></tr>
-                          <tr><td><strong>roles</strong></td><td><Badge bg="secondary">user</Badge></td></tr>
-                          <tr><td><strong>server</strong></td><td>{user.server || ''}</td></tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    {/* Server Info */}
-                    <div style={{ flex: 1 }}>
-                      <h6 className="mb-2">Server</h6>
-                      {user.servers && Object.keys(user.servers).length > 0 ? (
-                        <table className="table table-sm table-bordered mb-0" style={{ fontSize: '0.85em' }}>
-                          <tbody>
-                            {Object.entries(user.servers).map(([serverName, server]) => (
-                              <React.Fragment key={serverName}>
-                                <tr><td style={{ width: '140px' }}><strong>full_name</strong></td><td>{user.name}/{serverName || ''}</td></tr>
-                                <tr><td><strong>full_progress_url</strong></td><td></td></tr>
-                                <tr><td><strong>full_url</strong></td><td></td></tr>
-                                <tr><td><strong>last_activity</strong></td><td>{server.last_activity || ''}</td></tr>
-                                <tr><td><strong>name</strong></td><td>{serverName}</td></tr>
-                                <tr><td><strong>pending</strong></td><td>{server.pending || ''}</td></tr>
-                                <tr><td><strong>progress_url</strong></td><td>{server.progress_url || ''}</td></tr>
-                                <tr><td><strong>ready</strong></td><td>{server.ready ? 'true' : 'false'}</td></tr>
-                                <tr><td><strong>started</strong></td><td>{server.started || ''}</td></tr>
-                                <tr><td><strong>state</strong></td><td>{server.state && Object.keys(server.state).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.state, null, 2)}</pre> : ''}</td></tr>
-                                <tr><td><strong>stopped</strong></td><td>{!server.ready ? 'true' : 'false'}</td></tr>
-                                <tr><td><strong>url</strong></td><td>{server.url || ''}</td></tr>
-                                <tr><td><strong>user_options</strong></td><td>{server.user_options && Object.keys(server.user_options).length > 0 ? <pre style={{ margin: 0, fontSize: '0.8em', backgroundColor: 'var(--bs-tertiary-bg)', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'auto' }}>{JSON.stringify(server.user_options, null, 2)}</pre> : ''}</td></tr>
-                              </React.Fragment>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : (
-                        <p className="text-muted mb-0" style={{ fontSize: '0.85em' }}>No server running</p>
-                      )}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            )}
-            </React.Fragment>
+            <UserRow
+              key={user.name}
+              user={user}
+              quotaEnabled={quotaEnabled}
+              quotaMap={quotaMap}
+              selectedUsers={selectedUsers}
+              expandedUsers={expandedUsers}
+              editingQuota={editingQuota}
+              quotaInput={quotaInput}
+              actionLoading={actionLoading}
+              baseUrl={baseUrl}
+              onToggleSelection={handleToggleSelection}
+              onToggleExpand={handleToggleExpand}
+              onQuotaEdit={handleQuotaEdit}
+              onQuotaInputChange={handleQuotaInputChange}
+              onQuotaSave={handleQuotaSave}
+              onQuotaCancel={handleQuotaCancel}
+              onStartServer={handleStartServerCallback}
+              onStopServer={handleStopServerCallback}
+              onEditUser={openEditModal}
+              onPasswordReset={openPasswordModal}
+              onDeleteUser={openDeleteModal}
+            />
           ))}
         </tbody>
       </Table>

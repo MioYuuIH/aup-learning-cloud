@@ -19,7 +19,7 @@
 
 import { useState } from 'react';
 import { Modal, Button, Form, Alert, Spinner, InputGroup } from 'react-bootstrap';
-import * as api from '../api/client';
+import * as api from '@auplc/shared';
 
 interface Props {
   show: boolean;

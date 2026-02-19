@@ -19,8 +19,8 @@
 
 import { useState, useEffect } from 'react';
 import { Modal, Button, Form, Alert, Spinner, InputGroup } from 'react-bootstrap';
-import type { User } from '../types';
-import * as api from '../api/client';
+import type { User } from '@auplc/shared';
+import * as api from '@auplc/shared';
 
 interface Props {
   show: boolean;
