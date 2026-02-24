@@ -213,7 +213,7 @@ function App() {
               />
               {repoUrlError
                 ? <small className="repo-url-error">{repoUrlError}</small>
-                : <small>The repository will be cloned into your home directory at startup. Supports GitHub, GitLab, and Bitbucket.</small>
+                : <small>The repository will be cloned into your home directory at startup.{allowedGitProviders.length > 0 && ` Supports: ${allowedGitProviders.join(', ')}.`}</small>
               }
             </div>
           )}
