@@ -31,6 +31,7 @@ export interface ResourceMetadata {
   subDescription?: string;
   accelerator?: string;
   acceleratorKeys?: string[];
+  allowGitClone?: boolean;
 }
 
 export interface Resource {
@@ -50,4 +51,5 @@ export interface ResourcesResponse {
   resources: Resource[];
   groups: ResourceGroup[];
   acceleratorKeys: string[];
+  allowedGitProviders: string[];
 }

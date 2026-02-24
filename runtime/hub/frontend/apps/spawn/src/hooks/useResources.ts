@@ -33,6 +33,7 @@ interface UseResourcesResult {
   resources: Resource[];
   groups: ResourceGroup[];
   acceleratorKeys: string[];
+  allowedGitProviders: string[];
   loading: boolean;
   error: string | null;
 }
@@ -41,6 +42,7 @@ export function useResources(): UseResourcesResult {
   const [resources, setResources] = useState<Resource[]>([]);
   const [groups, setGroups] = useState<ResourceGroup[]>([]);
   const [acceleratorKeys, setAcceleratorKeys] = useState<string[]>([]);
+  const [allowedGitProviders, setAllowedGitProviders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,6 +77,7 @@ export function useResources(): UseResourcesResult {
         setResources(filteredResources);
         setGroups(filteredGroups);
         setAcceleratorKeys(response.acceleratorKeys);
+        setAllowedGitProviders(response.allowedGitProviders ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load resources');
       } finally {
@@ -85,5 +88,5 @@ export function useResources(): UseResourcesResult {
     fetchResources();
   }, []);
 
-  return { resources, groups, acceleratorKeys, loading, error };
+  return { resources, groups, acceleratorKeys, allowedGitProviders, loading, error };
 }

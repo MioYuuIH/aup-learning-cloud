@@ -172,6 +172,7 @@ custom:
         subDescription: "CPU Only Environment"
         accelerator: ""
         acceleratorKeys: []
+        allowGitClone: true
       Course-CV:
         group: "COURSE"
         description: "Computer Vision Course"

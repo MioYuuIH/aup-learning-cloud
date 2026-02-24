@@ -24,10 +24,26 @@ import { useResources } from './hooks/useResources';
 import { useAccelerators } from './hooks/useAccelerators';
 import { useQuota } from './hooks/useQuota';
 
+function validateRepoUrl(url: string, allowedProviders: string[]): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return 'Only HTTPS URLs are supported.';
+    const hostname = parsed.hostname.toLowerCase();
+    const allowed = allowedProviders.length === 0 || allowedProviders.some(
+      p => hostname === p || hostname.endsWith('.' + p)
+    );
+    if (!allowed) return `Host not allowed. Supported: ${allowedProviders.join(', ')}.`;
+  } catch {
+    return 'Invalid URL format.';
+  }
+  return '';
+}
+
 
 function App() {
 
-  const { resources, groups, loading: resourcesLoading, error: resourcesError } = useResources();
+  const { resources, groups, allowedGitProviders, loading: resourcesLoading, error: resourcesError } = useResources();
   const { accelerators, loading: acceleratorsLoading } = useAccelerators();
   const { quota, loading: quotaLoading } = useQuota();
 
@@ -36,6 +52,7 @@ function App() {
   const [runtime, setRuntime] = useState(20);
   const [runtimeInput, setRuntimeInput] = useState('20');
   const [repoUrl, setRepoUrl] = useState('');
+  const [repoUrlError, setRepoUrlError] = useState('');
 
   const loading = resourcesLoading || acceleratorsLoading || quotaLoading;
 
@@ -72,7 +89,8 @@ function App() {
     };
   }, [quota, selectedAccelerator?.quotaRate, runtime]);
 
-  const canStart = selectedResource && canAfford;
+  const allowGitClone = selectedResource?.metadata?.allowGitClone ?? false;
+  const canStart = selectedResource && canAfford && !repoUrlError;
 
   // Memoize non-empty groups filter
   const nonEmptyGroups = useMemo(
@@ -173,6 +191,33 @@ function App() {
             ))}
           </div>
 
+          {/* Git repository URL - only for resources that allow it */}
+          {allowGitClone && (
+            <div className="repo-url-section">
+              <label htmlFor="repoUrlInput">
+                Git Repository URL <span className="optional-label">(optional)</span>
+              </label>
+              <input
+                type="text"
+                id="repoUrlInput"
+                name="repo_url"
+                value={repoUrl}
+                onChange={e => {
+                  setRepoUrl(e.target.value);
+                  setRepoUrlError(validateRepoUrl(e.target.value, allowedGitProviders));
+                }}
+                placeholder="https://github.com/owner/repo"
+                autoComplete="off"
+                spellCheck={false}
+                className={repoUrlError ? 'input-error' : ''}
+              />
+              {repoUrlError
+                ? <small className="repo-url-error">{repoUrlError}</small>
+                : <small>The repository will be cloned into your home directory at startup. Supports GitHub, GitLab, and Bitbucket.</small>
+              }
+            </div>
+          )}
+
           {/* Runtime input */}
           <div className="runtime-container">
             <label htmlFor="runtimeInput">Run my server for (minutes):</label>
@@ -198,22 +243,6 @@ function App() {
                 <span style={{ color: '#666' }}>)</span>
               </div>
             )}
-          </div>
-
-          {/* Git repository URL */}
-          <div className="repo-url-section">
-            <label htmlFor="repoUrlInput">Git Repository URL <span className="optional-label">(optional)</span></label>
-            <input
-              type="text"
-              id="repoUrlInput"
-              name="repo_url"
-              value={repoUrl}
-              onChange={e => setRepoUrl(e.target.value)}
-              placeholder="https://github.com/owner/repo"
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <small>The repository will be cloned into your home directory at startup. Supports GitHub, GitLab, and Bitbucket.</small>
           </div>
 
           {/* Launch section */}

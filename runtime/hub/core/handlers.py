@@ -739,6 +739,7 @@ class ResourcesAPIHandler(APIHandler):
                     "resources": resources_list,
                     "groups": groups_list,
                     "acceleratorKeys": list(config.accelerators.keys()),
+                    "allowedGitProviders": list(config.git_clone.allowedProviders),
                 }
             )
         )

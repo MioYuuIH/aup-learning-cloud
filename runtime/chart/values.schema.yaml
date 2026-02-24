@@ -3210,6 +3210,12 @@ properties:
                   items:
                     type: string
                   description: List of accelerator keys from custom.accelerators
+                allowGitClone:
+                  type: boolean
+                  description: |
+                    Allow users to clone a Git repository into their home
+                    directory at spawn time. Should be false for course
+                    resources that already include their own content.
             description: |
               Resource metadata for spawn UI display.
               Defines how each resource appears in the selection interface.

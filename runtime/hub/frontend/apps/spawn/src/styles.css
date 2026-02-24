@@ -69,6 +69,15 @@ SOFTWARE.
 [data-bs-theme="dark"] .quota-display-simple { color: var(--dark-text-secondary) !important; }
 [data-bs-theme="dark"] .quota-cost-preview { color: var(--dark-text-secondary) !important; }
 
+/* Repo URL section */
+[data-bs-theme="dark"] .repo-url-section { border-top-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .repo-url-section label { color: var(--dark-text-primary) !important; }
+[data-bs-theme="dark"] .repo-url-section input[type="text"] { background: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; border-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .repo-url-section input[type="text"]:focus { border-color: var(--dark-text-secondary) !important; box-shadow: 0 0 0 3px rgba(173,181,189,0.15) !important; }
+[data-bs-theme="dark"] .repo-url-section input.input-error { border-color: #dc3545 !important; }
+[data-bs-theme="dark"] .repo-url-section small { color: var(--dark-text-muted) !important; }
+[data-bs-theme="dark"] .repo-url-error { color: #f8888e !important; }
+
 /* Warning box */
 [data-bs-theme="dark"] .warning-box { background: #4a3f2a !important; border-color: #6b5c3a !important; color: #ffc107 !important; }
 
@@ -373,4 +382,13 @@ SOFTWARE.
     color: #6c757d;
     margin-top: 6px;
     font-size: 12px;
+}
+
+.repo-url-section input.input-error {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.15);
+}
+
+.repo-url-error {
+    color: #dc3545;
 }

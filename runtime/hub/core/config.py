@@ -93,6 +93,7 @@ class ResourceMetadata(BaseModel):
     subDescription: str = ""
     accelerator: str = ""
     acceleratorKeys: list[str] = Field(default_factory=list)
+    allowGitClone: bool = False
 
     model_config = {"extra": "allow"}
 

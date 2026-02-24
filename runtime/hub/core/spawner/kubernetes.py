@@ -650,6 +650,18 @@ class RemoteLabKubeSpawner(KubeSpawner):
             repo_url = ""
             access_token = ""
 
+        # Check if the selected resource permits git cloning
+        resource_type = self.user_options.get("resource_type", "")
+        resource_metadata = self._hub_config.get_resource_metadata(resource_type) if self._hub_config else None
+        allow_git_clone = resource_metadata.allowGitClone if resource_metadata else False
+
+        if repo_url and not allow_git_clone:
+            self.log.warning(
+                f"Repository URL ignored for user {self.user.name}: "
+                f"resource '{resource_type}' does not allow git cloning"
+            )
+            repo_url = ""
+
         if repo_url:
             is_valid, err_msg, sanitized_url = self._validate_and_sanitize_repo_url(repo_url)
             if not is_valid:
