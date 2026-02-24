@@ -35,6 +35,7 @@ function App() {
   const [selectedAcceleratorKey, setSelectedAcceleratorKey] = useState<string | null>(null);
   const [runtime, setRuntime] = useState(20);
   const [runtimeInput, setRuntimeInput] = useState('20');
+  const [repoUrl, setRepoUrl] = useState('');
 
   const loading = resourcesLoading || acceleratorsLoading || quotaLoading;
 
@@ -197,6 +198,22 @@ function App() {
                 <span style={{ color: '#666' }}>)</span>
               </div>
             )}
+          </div>
+
+          {/* Git repository URL */}
+          <div className="repo-url-section">
+            <label htmlFor="repoUrlInput">Git Repository URL <span className="optional-label">(optional)</span></label>
+            <input
+              type="text"
+              id="repoUrlInput"
+              name="repo_url"
+              value={repoUrl}
+              onChange={e => setRepoUrl(e.target.value)}
+              placeholder="https://github.com/owner/repo"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <small>The repository will be cloned into your home directory at startup. Supports GitHub, GitLab, and Bitbucket.</small>
           </div>
 
           {/* Launch section */}

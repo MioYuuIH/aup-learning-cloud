@@ -55,6 +55,22 @@ custom:
     enabled: false
 
   # ============================================================================
+  # Git Repository Cloning
+  # ============================================================================
+  # Users can provide an optional Git URL on the spawn form; the repo will be
+  # cloned into ~/home at container start via an init container.
+  gitClone:
+    # Container image used for git operations (must include git and sh)
+    initContainerImage: "alpine/git:2.47.2"
+    # Allowed Git hosting providers (subdomains are also accepted)
+    allowedProviders:
+      - github.com
+      - gitlab.com
+      - bitbucket.org
+    # Maximum time (seconds) allowed for a clone or fetch operation
+    maxCloneTimeout: 300
+
+  # ============================================================================
   # Accelerator Configuration
   # ============================================================================
   # Define available GPU/NPU node types for course selection interface

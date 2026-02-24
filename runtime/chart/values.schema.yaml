@@ -3359,6 +3359,33 @@ properties:
                     balanceBelow: 400
               ```
 
+      gitClone:
+        type: object
+        additionalProperties: false
+        description: |
+          Git repository cloning configuration.
+          Users can optionally provide a Git URL on the spawn form; the repo is
+          cloned into their home directory via an init container at startup.
+        properties:
+          initContainerImage:
+            type: string
+            description: |
+              Container image used for git operations.
+              Must include `git` and `sh`. Defaults to `alpine/git:2.47.2`.
+          allowedProviders:
+            type: array
+            items:
+              type: string
+            description: |
+              Allowed Git hosting providers. Subdomains are also accepted.
+              Defaults to github.com, gitlab.com, and bitbucket.org.
+          maxCloneTimeout:
+            type: integer
+            minimum: 10
+            description: |
+              Maximum time in seconds allowed for a clone or fetch operation.
+              Defaults to 300 (5 minutes).
+
       apiService:
         type: object
         additionalProperties: false
