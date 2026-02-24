@@ -1,0 +1,20 @@
+{
+  "name": "auplc-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:admin": "pnpm --filter @auplc/admin run dev",
+    "dev:spawn": "pnpm --filter @auplc/spawn run dev",
+    "build": "pnpm -r run build",
+    "build:admin": "pnpm --filter @auplc/admin run build",
+    "build:spawn": "pnpm --filter @auplc/spawn run build",
+    "lint": "pnpm -r run lint",
+    "clean": "pnpm -r exec rm -rf dist node_modules"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

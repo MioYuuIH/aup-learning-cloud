@@ -116,7 +116,16 @@ for trait, cfg_key in (
 ):
     if cfg_key is None:
         cfg_key = _camel_case(trait)
-    z2jh.set_config_if_not_none(c.JupyterHub, trait, "hub." + cfg_key)
+
+    # Special handling for template_vars - merge instead of overwrite
+    if trait == "template_vars":
+        value = z2jh.get_config("hub." + cfg_key)
+        if value is not None:
+            if not isinstance(c.JupyterHub.template_vars, dict):
+                c.JupyterHub.template_vars = {}
+            c.JupyterHub.template_vars.update(value)
+    else:
+        z2jh.set_config_if_not_none(c.JupyterHub, trait, "hub." + cfg_key)
 
 # Hub bind and connect URLs
 hub_container_port = 8081

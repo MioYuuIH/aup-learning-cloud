@@ -118,7 +118,6 @@ def setup_hub(c: Any) -> None:
 
     if config.auth_mode == "auto-login":
         c.Authenticator.allow_all = True
-        c.JupyterHub.template_vars = {"hide_logout": True}
     elif config.auth_mode == "multi":
         c.MultiAuthenticator.authenticators = [
             {
@@ -264,5 +263,7 @@ def setup_hub(c: Any) -> None:
     if not isinstance(c.JupyterHub.template_vars, dict):
         c.JupyterHub.template_vars = {}
     c.JupyterHub.template_vars["authenticator_mode"] = config.auth_mode  # type: ignore[assignment]
+    c.JupyterHub.template_vars["hide_logout"] = config.auth_mode == "auto-login"  # type: ignore[assignment]
 
     print(f"[SETUP] Hub setup complete: auth_mode={config.auth_mode}")
+    print(f"[SETUP] template_vars: {c.JupyterHub.template_vars}")

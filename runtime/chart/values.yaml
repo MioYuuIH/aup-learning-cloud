@@ -47,11 +47,12 @@ custom:
   # Define these in runtime/values.yaml, not here
   accelerators: {}
 
-  # Resource images and requirements
+  # Resource images, requirements, and metadata
   # Define these in runtime/values.yaml, not here
   resources:
     images: {}
     requirements: {}
+    metadata: {}
 
   # Team to resource mapping
   # Define these in runtime/values.yaml, not here

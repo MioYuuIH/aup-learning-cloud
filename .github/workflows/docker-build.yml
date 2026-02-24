@@ -24,10 +24,12 @@ on:
     branches: [main]
     paths:
       - 'runtime/Dockerfile/**'
+      - 'dockerfiles/**'
   pull_request:
     branches: [main]
     paths:
       - 'runtime/Dockerfile/**'
+      - 'dockerfiles/**'
   workflow_dispatch:
     inputs:
       override_versions:
@@ -39,40 +41,64 @@ on:
         default: 'v1.0'
 
 jobs:
-  build:
+  build-hub:
+    name: Build Hub Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_PACKAGES_TOKEN }}
+
+      - name: Build and push Hub image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: dockerfiles/Hub/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/amdresearch/auplc-hub:${{ github.event.inputs.override_versions || 'v1.2.0' }}
+            ghcr.io/amdresearch/auplc-hub:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-notebooks:
+    name: Build Notebook Images
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - docker_path: runtime/Dockerfile/Hub
-            image_name: aup-jupyterhub-hub
-            default_version: 'v1.1.3'
           - docker_path: runtime/Dockerfile/Basic
             image_name: aup-cpu-notebook
             default_version: 'v1.0'
-          # - docker_path: Dockerfile/ROCm-Pytorch
-          #   image_name: aup-rocm-pytorch-notebook
-          #   default_version: 'v1.0'
           - docker_path: runtime/Dockerfile/RyzenAI-ONNX
             image_name: aup-ryzenai-onnx-notebook
             default_version: 'v2.0'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GH_PACKAGES_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.docker_path }}
           file: ${{ matrix.docker_path }}/Dockerfile

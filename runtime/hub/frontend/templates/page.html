@@ -72,11 +72,6 @@ SOFTWARE.
         #amd-logo svg {
           color: #000000;
         }
-        @media (prefers-color-scheme: dark) {
-          #amd-logo svg {
-            color: #ffffff;
-          }
-        }
         [data-bs-theme="dark"] #amd-logo svg {
           color: #ffffff;
         }
@@ -235,18 +230,20 @@ SOFTWARE.
                     <span id="login_widget">
                       {% if user %}
                         <span class="me-1">{{ user.name }}</span>
-                        {% if not user.name.startswith('github:') %}
-                        <a id="change-password"
-                           role="button"
-                           class="btn btn-sm btn-outline-secondary me-1"
-                           href="{{ base_url }}auth/change-password">
-                          <i aria-hidden="true" class="fa fa-key"></i> Change Password
-                        </a>
+                        {% if not hide_logout %}
+                          {% if not user.name.startswith('github:') %}
+                          <a id="change-password"
+                             role="button"
+                             class="btn btn-sm btn-outline-secondary me-1"
+                             href="{{ base_url }}auth/change-password">
+                            <i aria-hidden="true" class="fa fa-key"></i> Change Password
+                          </a>
+                          {% endif %}
+                          <a id="logout"
+                             role="button"
+                             class="btn btn-sm btn-outline-secondary"
+                             href="{{ logout_url }}"> <i aria-hidden="true" class="fa fa-sign-out"></i> Logout</a>
                         {% endif %}
-                        <a id="logout"
-                           role="button"
-                           class="btn btn-sm btn-outline-secondary"
-                           href="{{ logout_url }}"> <i aria-hidden="true" class="fa fa-sign-out"></i> Logout</a>
                       {% else %}
                         <a id="login"
                            role="button"
@@ -278,7 +275,7 @@ SOFTWARE.
     {% endcall %}
     {% block script %}
     {% endblock script %}
-    {% if user and not user.name.startswith('github:') %}
+    {% if user and not user.name.startswith('github:') and not hide_logout %}
     <script type="text/javascript">
       // Check if user needs to change password (only for native users)
       (function() {

@@ -3187,6 +3187,45 @@ properties:
                   memory_limit: "24Gi"
                   amd.com/gpu: "1"
               ```
+          metadata:
+            type: object
+            additionalProperties:
+              type: object
+              additionalProperties: false
+              properties:
+                group:
+                  type: string
+                  description: Category group name for UI display (e.g., "COURSE", "OTHERS")
+                description:
+                  type: string
+                  description: Main title displayed on the resource card
+                subDescription:
+                  type: string
+                  description: Secondary description text shown below the title
+                accelerator:
+                  type: string
+                  description: Accelerator type label (e.g., "GPU", "NPU")
+                acceleratorKeys:
+                  type: array
+                  items:
+                    type: string
+                  description: List of accelerator keys from custom.accelerators
+            description: |
+              Resource metadata for spawn UI display.
+              Defines how each resource appears in the selection interface.
+
+              Example:
+              ```yaml
+              metadata:
+                Course-DL:
+                  group: "COURSE"
+                  description: "Deep Learning Course"
+                  subDescription: "Suitable for DL experiments with GPU"
+                  accelerator: "GPU"
+                  acceleratorKeys:
+                    - strix-halo
+                    - dgpu
+              ```
 
       teams:
         type: object
