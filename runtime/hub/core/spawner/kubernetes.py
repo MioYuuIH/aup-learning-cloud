@@ -680,7 +680,8 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
                     init_container = self._build_git_init_container(sanitized_url, repo_name, home_volume_name)
                     self.init_containers = [init_container] + list(self.init_containers or [])
-                    self.log.info(f"Configured git init container for {self.user.name}: {sanitized_url} -> ~/{ repo_name}")
+                    self.default_url = f"/lab/tree/{repo_name}"
+                    self.log.info(f"Configured git init container for {self.user.name}: {sanitized_url} -> ~/{repo_name}")
                 except Exception as e:
                     self.log.warning(f"Failed to configure git init container: {e}")
 
