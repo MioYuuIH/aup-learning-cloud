@@ -20,13 +20,13 @@
 
 # Git repository clone script for JupyterHub init container.
 #
-# Clones a repository into an emptyDir volume that is mounted into the
-# user's container. The clone is ephemeral and does not persist after
-# the session ends.
+# Clones a repository onto the user's home PVC. The clone directory is
+# cleaned up by a preStop lifecycle hook when the session ends, so the
+# repository does not persist between sessions.
 #
 # Environment variables (required):
 #   REPO_URL          - HTTPS URL of the git repository to clone
-#   CLONE_DIR         - Absolute path to clone into (e.g. /repo)
+#   CLONE_DIR         - Absolute path to clone into (e.g. /home/jovyan/repo)
 #   MAX_CLONE_TIMEOUT - Timeout in seconds for git operations
 #
 # Environment variables (optional):

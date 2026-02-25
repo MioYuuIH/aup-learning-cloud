@@ -192,10 +192,10 @@ function App() {
     if (allowGitClone && normalizedRepoUrl && !repoUrlError) {
       const repoPath = normalizedRepoUrl.replace(/^https?:\/\//, '');
       const branch = repoBranch ? `/tree/${repoBranch}` : '';
-      const base = window.location.href.replace(/\/spawn(\?.*)?$/, '/git/');
+      const base = window.location.href.replace(/\/spawn(\/[^?]*)?(\?.*)?$/, '/git/');
       return `${base}${repoPath}${branch}?${params.toString()}`;
     }
-    const spawnBase = window.location.href.replace(/\/spawn(\?.*)?$/, '/spawn');
+    const spawnBase = window.location.href.replace(/\/spawn(\/[^?]*)?(\?.*)?$/, '/spawn');
     return `${spawnBase}?${params.toString()}`;
   }, [normalizedRepoUrl, repoBranch, repoUrlError, allowGitClone, selectedResource, selectedAccelerator]);
 

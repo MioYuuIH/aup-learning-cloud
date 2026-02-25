@@ -431,12 +431,15 @@ class RemoteLabKubeSpawner(KubeSpawner):
         name = re.sub(r'[^a-zA-Z0-9_.-]', '_', name)
         return name or "repo"
 
-    def _build_git_init_container(self, repo_url: str, volume_name: str, repo_branch: str = "") -> dict:
+    def _build_git_init_container(
+        self, repo_url: str, repo_name: str, home_volume_name: str, repo_branch: str = ""
+    ) -> dict:
         """
-        Build an init container spec that clones a repository into an emptyDir volume.
+        Build an init container spec that clones a repository onto the user's home PVC.
 
-        The cloned content is mounted into the main container at /home/jovyan/<repo_name>
-        and is ephemeral — it does not persist after the session ends.
+        The init container mounts the same home PVC as the main container and clones
+        into /home/jovyan/<repo_name>. A preStop lifecycle hook on the main container
+        removes the directory when the session ends so it does not persist.
 
         - git clone --depth 1 [--branch <branch>]; exits 1 on failure so spawn is aborted
         - repo_branch: optional branch/tag to check out (empty = default branch)
@@ -449,9 +452,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
         with open(script_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
 
+        clone_dir = f"/home/jovyan/{repo_name}"
+
         env = [
             {"name": "REPO_URL", "value": repo_url},
-            {"name": "CLONE_DIR", "value": "/repo"},
+            {"name": "CLONE_DIR", "value": clone_dir},
             {"name": "MAX_CLONE_TIMEOUT", "value": str(self.MAX_CLONE_TIMEOUT)},
         ]
         if repo_branch:
@@ -463,7 +468,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
             "imagePullPolicy": "IfNotPresent",
             "command": ["sh", "-c", f"echo {encoded} | base64 -d | sh"],
             "env": env,
-            "volumeMounts": [{"name": volume_name, "mountPath": "/repo"}],
+            "volumeMounts": [{"name": home_volume_name, "mountPath": "/home/jovyan"}],
             "securityContext": {
                 "runAsUser": 1000,
                 "runAsNonRoot": True,
@@ -706,16 +711,28 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 try:
                     repo_name = self._extract_repo_name(sanitized_url)
 
-                    # Use an emptyDir volume for the cloned repo — ephemeral, does not
-                    # persist on the user's home PVC. The init container clones into /repo
-                    # on this volume, and the main container sees it at /home/jovyan/<name>.
-                    git_vol_name = "git-repo"
-                    init_container = self._build_git_init_container(sanitized_url, git_vol_name, repo_branch)
+                    # Clone directly onto the user's home PVC. The init container
+                    # mounts the same volume as the main container and clones into
+                    # /home/jovyan/<repo_name>. A preStop hook cleans it up when
+                    # the session ends so the repo does not persist.
+                    safe_username = self._expand_user_properties("{username}")
+                    home_volume_name = f"volume-{safe_username}"
+                    init_container = self._build_git_init_container(
+                        sanitized_url, repo_name, home_volume_name, repo_branch
+                    )
                     self.init_containers = [init_container] + list(self.init_containers or [])
-                    self.volumes = list(self.volumes or []) + [{"name": git_vol_name, "emptyDir": {}}]
-                    self.volume_mounts = list(self.volume_mounts or []) + [
-                        {"name": git_vol_name, "mountPath": f"/home/jovyan/{repo_name}"}
-                    ]
+
+                    # preStop lifecycle hook: remove the cloned directory on session end
+                    extra = dict(self.extra_container_config or {})
+                    extra["lifecycle"] = {
+                        "preStop": {
+                            "exec": {
+                                "command": ["rm", "-rf", f"/home/jovyan/{repo_name}"]
+                            }
+                        }
+                    }
+                    self.extra_container_config = extra
+
                     self.default_url = f"/lab/tree/{repo_name}"
                     self._has_git_init_container = True
                     branch_info = f" (branch: {repo_branch})" if repo_branch else ""
