@@ -178,12 +178,14 @@ function App() {
     return userSelected ?? availableAccelerators[0];
   }, [availableAccelerators, selectedAcceleratorKey]);
 
+  const allowGitClone = selectedResource?.metadata?.allowGitClone ?? false;
+
   const shareableUrl = useMemo(() => {
     if (!selectedResource) return '';
     const params = new URLSearchParams();
     params.set('resource', selectedResource.key);
     if (selectedAccelerator) params.set('accelerator', selectedAccelerator.key);
-    if (normalizedRepoUrl && !repoUrlError) {
+    if (allowGitClone && normalizedRepoUrl && !repoUrlError) {
       const repoPath = normalizedRepoUrl.replace(/^https?:\/\//, '');
       const branch = repoBranch ? `/tree/${repoBranch}` : '';
       const base = window.location.href.replace(/\/spawn(\?.*)?$/, '/git/');
@@ -191,7 +193,7 @@ function App() {
     }
     const spawnBase = window.location.href.replace(/\/spawn(\?.*)?$/, '/spawn');
     return `${spawnBase}?${params.toString()}`;
-  }, [normalizedRepoUrl, repoBranch, repoUrlError, selectedResource, selectedAccelerator]);
+  }, [normalizedRepoUrl, repoBranch, repoUrlError, allowGitClone, selectedResource, selectedAccelerator]);
 
   // Memoize quota calculations
   const { cost, canAfford, insufficientQuota, maxRuntime } = useMemo(() => {
@@ -208,8 +210,6 @@ function App() {
         : 240,
     };
   }, [quota, selectedAccelerator?.quotaRate, runtime]);
-
-  const allowGitClone = selectedResource?.metadata?.allowGitClone ?? false;
   const canStart = selectedResource && canAfford && !repoUrlError;
 
   // Memoize non-empty groups filter
