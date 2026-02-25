@@ -98,6 +98,7 @@ function App() {
 
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [selectedAcceleratorKey, setSelectedAcceleratorKey] = useState<string | null>(null);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [runtime, setRuntime] = useState(20);
   const [runtimeInput, setRuntimeInput] = useState('20');
   const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
@@ -142,6 +143,9 @@ function App() {
     if (target) {
       hasAutoSelected.current = true;
       setSelectedResource(target);
+      // Expand the group containing the pre-selected resource
+      const targetGroup = groups.find(g => g.resources.some(r => r.key === target!.key));
+      if (targetGroup) setExpandedGroup(targetGroup.name);
       if (initialAcceleratorKey) {
         const validKeys = target.metadata?.acceleratorKeys ?? [];
         if (validKeys.includes(initialAcceleratorKey)) {
@@ -150,8 +154,12 @@ function App() {
           setParamWarning(`Unknown accelerator '${initialAcceleratorKey}' for this resource, using default.`);
         }
       }
+    } else {
+      // Default: expand the first group
+      const firstGroup = groups.find(g => g.resources.length > 0);
+      if (firstGroup) setExpandedGroup(firstGroup.name);
     }
-  }, [resources, resourcesLoading, initialResourceKey, initialAcceleratorKey, autostart, initialRepoUrl]);
+  }, [resources, groups, resourcesLoading, initialResourceKey, initialAcceleratorKey, autostart, initialRepoUrl]);
 
   // Auto-submit once resource is selected and form is ready
   useEffect(() => {
@@ -221,6 +229,11 @@ function App() {
     () => groups.filter(g => g.resources.length > 0),
     [groups]
   );
+
+  // Accordion: toggle group, only one open at a time
+  const handleToggleGroup = useCallback((groupName: string) => {
+    setExpandedGroup(prev => prev === groupName ? null : groupName);
+  }, []);
 
   // Memoize callbacks to prevent child re-renders
   const handleSelectResource = useCallback((resource: Resource) => {
@@ -318,14 +331,15 @@ function App() {
       ) : (
         <>
           <div id="resourceList">
-            {nonEmptyGroups.map((group, index) => (
+            {nonEmptyGroups.map((group) => (
               <CategorySection
                 key={group.name}
                 group={group}
+                expanded={expandedGroup === group.name}
+                onToggle={handleToggleGroup}
                 selectedResource={selectedResource}
                 onSelectResource={handleSelectResource}
                 onClearResource={handleClearResource}
-                defaultExpanded={!initialResourceKey && !initialRepoUrl && !autostart && index === 0}
                 accelerators={accelerators}
                 selectedAccelerator={selectedAccelerator}
                 onSelectAccelerator={handleSelectAccelerator}

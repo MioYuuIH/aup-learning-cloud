@@ -17,16 +17,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { useState, memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback } from 'react';
 import type { Resource, ResourceGroup, Accelerator } from '@auplc/shared';
 import { CourseCard } from './CourseCard';
 
 interface Props {
   group: ResourceGroup;
+  expanded: boolean;
+  onToggle: (groupName: string) => void;
   selectedResource: Resource | null;
   onSelectResource: (resource: Resource) => void;
   onClearResource: () => void;
-  defaultExpanded?: boolean;
   accelerators: Accelerator[];
   selectedAccelerator: Accelerator | null;
   onSelectAccelerator: (accelerator: Accelerator) => void;
@@ -39,10 +40,11 @@ interface Props {
 
 export const CategorySection = memo(function CategorySection({
   group,
+  expanded,
+  onToggle,
   selectedResource,
   onSelectResource,
   onClearResource,
-  defaultExpanded = false,
   accelerators,
   selectedAccelerator,
   onSelectAccelerator,
@@ -52,39 +54,23 @@ export const CategorySection = memo(function CategorySection({
   onRepoUrlChange,
   allowedGitProviders,
 }: Props) {
-  const [collapsed, setCollapsed] = useState(!defaultExpanded);
-
-  // Auto-expand once when a resource in this group is pre-selected (e.g. via URL param)
-  const hasAutoExpanded = useRef(false);
-  useEffect(() => {
-    if (hasAutoExpanded.current) return;
-    const groupContainsSelected = selectedResource != null &&
-      group.resources.some(r => r.key === selectedResource.key);
-    if (groupContainsSelected) {
-      hasAutoExpanded.current = true;
-      setCollapsed(false);
+  const handleToggle = useCallback(() => {
+    // When collapsing, clear selection if the selected resource is in this group
+    if (expanded && selectedResource != null &&
+        group.resources.some(r => r.key === selectedResource.key)) {
+      onClearResource();
     }
-  }, [selectedResource, group.resources]);
-
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed(prev => {
-      // When collapsing, clear selection if the selected resource is in this group
-      if (!prev && selectedResource != null &&
-          group.resources.some(r => r.key === selectedResource.key)) {
-        onClearResource();
-      }
-      return !prev;
-    });
-  }, [selectedResource, group.resources, onClearResource]);
+    onToggle(group.name);
+  }, [expanded, selectedResource, group.resources, group.name, onClearResource, onToggle]);
 
   // Use displayName from API, fallback to group name
   const displayName = group.displayName ?? group.name;
 
   return (
-    <div className={`resource-category ${collapsed ? 'collapsed' : ''}`}>
+    <div className={`resource-category ${expanded ? '' : 'collapsed'}`}>
       <div
         className="resource-category-header"
-        onClick={toggleCollapsed}
+        onClick={handleToggle}
       >
         <h5>📂 {displayName}</h5>
         <span className="collapse-icon">▼</span>
