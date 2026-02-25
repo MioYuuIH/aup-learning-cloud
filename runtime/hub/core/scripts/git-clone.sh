@@ -18,11 +18,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Git repository clone/update script for JupyterHub init container.
+# Git repository clone script for JupyterHub init container.
+#
+# Clones a repository into an emptyDir volume that is mounted into the
+# user's container. The clone is ephemeral and does not persist after
+# the session ends.
 #
 # Environment variables (required):
 #   REPO_URL          - HTTPS URL of the git repository to clone
-#   CLONE_DIR         - Absolute path to clone into (e.g. /home/jovyan/myrepo)
+#   CLONE_DIR         - Absolute path to clone into (e.g. /repo)
 #   MAX_CLONE_TIMEOUT - Timeout in seconds for git operations
 #
 # Environment variables (optional):
@@ -39,34 +43,17 @@ git config --global http.sslVerify true
 git config --global user.email jupyterhub@local
 git config --global user.name JupyterHub
 
-if [ ! -d "$CLONE_DIR/.git" ]; then
-  if [ -n "${BRANCH:-}" ]; then
-    echo "Cloning $REPO_URL (branch: $BRANCH) into $CLONE_DIR"
-    if ! timeout "$MAX_CLONE_TIMEOUT" git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$CLONE_DIR"; then
-      echo "Clone failed - check URL, branch name, and network access"
-      exit 1
-    fi
-  else
-    echo "Cloning $REPO_URL into $CLONE_DIR"
-    if ! timeout "$MAX_CLONE_TIMEOUT" git clone --depth 1 "$REPO_URL" "$CLONE_DIR"; then
-      echo "Clone failed - check URL and network access"
-      exit 1
-    fi
+if [ -n "${BRANCH:-}" ]; then
+  echo "Cloning $REPO_URL (branch: $BRANCH) into $CLONE_DIR"
+  if ! timeout "$MAX_CLONE_TIMEOUT" git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$CLONE_DIR"; then
+    echo "Clone failed - check URL, branch name, and network access"
+    exit 1
   fi
 else
-  echo "Repository exists, fetching latest..."
-  if [ -n "${BRANCH:-}" ]; then
-    if timeout "$MAX_CLONE_TIMEOUT" git -C "$CLONE_DIR" fetch origin "$BRANCH"; then
-      git -C "$CLONE_DIR" reset --hard "origin/$BRANCH"
-    else
-      echo "Fetch failed, keeping existing version"
-    fi
-  else
-    if timeout "$MAX_CLONE_TIMEOUT" git -C "$CLONE_DIR" fetch origin; then
-      git -C "$CLONE_DIR" reset --hard origin/HEAD
-    else
-      echo "Fetch failed, keeping existing version"
-    fi
+  echo "Cloning $REPO_URL into $CLONE_DIR"
+  if ! timeout "$MAX_CLONE_TIMEOUT" git clone --depth 1 "$REPO_URL" "$CLONE_DIR"; then
+    echo "Clone failed - check URL and network access"
+    exit 1
   fi
 fi
 

@@ -333,7 +333,7 @@ function App() {
                 >
                   ?
                   <span className="repo-url-tooltip">
-                    The repository will be cloned into your home directory at startup.
+                    The repository will be cloned at startup and available during this session only.
                     {allowedGitProviders.length > 0 && ` Supports: ${allowedGitProviders.join(', ')}.`}
                   </span>
                 </span>

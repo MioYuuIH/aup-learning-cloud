@@ -431,14 +431,14 @@ class RemoteLabKubeSpawner(KubeSpawner):
         name = re.sub(r'[^a-zA-Z0-9_.-]', '_', name)
         return name or "repo"
 
-    def _build_git_init_container(self, repo_url: str, repo_name: str, home_volume_name: str, repo_branch: str = "") -> dict:
+    def _build_git_init_container(self, repo_url: str, volume_name: str, repo_branch: str = "") -> dict:
         """
-        Build an init container spec that clones or updates the given repository
-        into /home/jovyan/<repo_name> on the user's home PVC.
+        Build an init container spec that clones a repository into an emptyDir volume.
 
-        - First spawn: git clone --depth 1 [--branch <branch>]; exits 1 on failure so spawn is aborted
-        - Subsequent spawns: git fetch + reset --hard (always gets latest, no conflict)
-        - Fetch failure: logs the error and continues with existing version
+        The cloned content is mounted into the main container at /home/jovyan/<repo_name>
+        and is ephemeral — it does not persist after the session ends.
+
+        - git clone --depth 1 [--branch <branch>]; exits 1 on failure so spawn is aborted
         - repo_branch: optional branch/tag to check out (empty = default branch)
 
         The script is read from core/scripts/git-clone.sh, base64-encoded and decoded
@@ -451,7 +451,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
         env = [
             {"name": "REPO_URL", "value": repo_url},
-            {"name": "CLONE_DIR", "value": f"/home/jovyan/{repo_name}"},
+            {"name": "CLONE_DIR", "value": "/repo"},
             {"name": "MAX_CLONE_TIMEOUT", "value": str(self.MAX_CLONE_TIMEOUT)},
         ]
         if repo_branch:
@@ -463,7 +463,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
             "imagePullPolicy": "IfNotPresent",
             "command": ["sh", "-c", f"echo {encoded} | base64 -d | sh"],
             "env": env,
-            "volumeMounts": [{"name": home_volume_name, "mountPath": "/home/jovyan"}],
+            "volumeMounts": [{"name": volume_name, "mountPath": "/repo"}],
             "securityContext": {
                 "runAsUser": 1000,
                 "runAsNonRoot": True,
@@ -706,16 +706,16 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 try:
                     repo_name = self._extract_repo_name(sanitized_url)
 
-                    # Reference the volume KubeSpawner will create for the user's home
-                    # directory. The name follows the chart's volumeNameTemplate:
-                    # volume-{user_server}, which for the default server is volume-{username}.
-                    # We must NOT add a duplicate volume entry for the same PVC — on RWO
-                    # storage that causes the pod to hang waiting for volume attachment.
-                    safe_username = self._expand_user_properties("{username}")
-                    home_volume_name = f"volume-{safe_username}"
-
-                    init_container = self._build_git_init_container(sanitized_url, repo_name, home_volume_name, repo_branch)
+                    # Use an emptyDir volume for the cloned repo — ephemeral, does not
+                    # persist on the user's home PVC. The init container clones into /repo
+                    # on this volume, and the main container sees it at /home/jovyan/<name>.
+                    git_vol_name = "git-repo"
+                    init_container = self._build_git_init_container(sanitized_url, git_vol_name, repo_branch)
                     self.init_containers = [init_container] + list(self.init_containers or [])
+                    self.volumes = list(self.volumes or []) + [{"name": git_vol_name, "emptyDir": {}}]
+                    self.volume_mounts = list(self.volume_mounts or []) + [
+                        {"name": git_vol_name, "mountPath": f"/home/jovyan/{repo_name}"}
+                    ]
                     self.default_url = f"/lab/tree/{repo_name}"
                     self._has_git_init_container = True
                     branch_info = f" (branch: {repo_branch})" if repo_branch else ""
