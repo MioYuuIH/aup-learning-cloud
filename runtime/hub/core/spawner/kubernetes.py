@@ -32,8 +32,8 @@ import json
 import os
 import re
 import time
-from urllib.parse import urlparse
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 import aiohttp
 from jupyterhub.user import User as JupyterHubUser
@@ -671,11 +671,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
         try:
             repo_url = str(self.user_options.get("repo_url", "") or "").strip()
             repo_branch = str(self.user_options.get("repo_branch", "") or "").strip()
-            access_token = str(self.user_options.get("access_token", "") or "").strip()
         except Exception:
             repo_url = ""
             repo_branch = ""
-            access_token = ""
 
         # Check if the selected resource permits git cloning
         resource_type = self.user_options.get("resource_type", "")

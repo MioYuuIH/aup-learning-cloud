@@ -767,8 +767,8 @@ class GitSpawnHandler(BaseHandler):
         try:
             parsed = urlparse(repo_url)
             hostname = parsed.netloc.lower()
-        except Exception:
-            raise web.HTTPError(400, "Invalid repository URL")
+        except Exception as e:
+            raise web.HTTPError(400, "Invalid repository URL") from e
 
         is_allowed = any(
             hostname == p or hostname.endswith("." + p) for p in allowed_providers
