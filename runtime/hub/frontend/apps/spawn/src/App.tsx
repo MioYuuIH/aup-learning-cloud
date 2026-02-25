@@ -110,14 +110,6 @@ function App() {
     [repoUrl]
   );
 
-  const shareableUrl = useMemo(() => {
-    if (!normalizedRepoUrl || repoUrlError) return '';
-    const repoPath = normalizedRepoUrl.replace(/^https?:\/\//, '');
-    const branch = repoBranch ? `/tree/${repoBranch}` : '';
-    const base = window.location.href.replace(/\/spawn(\?.*)?$/, '/git/');
-    return `${base}${repoPath}${branch}`;
-  }, [normalizedRepoUrl, repoBranch, repoUrlError]);
-
   const loading = resourcesLoading || acceleratorsLoading || quotaLoading;
 
   // Validate initial repo_url from query params once providers are loaded
@@ -185,6 +177,18 @@ function App() {
     const userSelected = availableAccelerators.find(acc => acc.key === selectedAcceleratorKey);
     return userSelected ?? availableAccelerators[0];
   }, [availableAccelerators, selectedAcceleratorKey]);
+
+  const shareableUrl = useMemo(() => {
+    if (!normalizedRepoUrl || repoUrlError) return '';
+    const repoPath = normalizedRepoUrl.replace(/^https?:\/\//, '');
+    const branch = repoBranch ? `/tree/${repoBranch}` : '';
+    const base = window.location.href.replace(/\/spawn(\?.*)?$/, '/git/');
+    const params = new URLSearchParams();
+    if (selectedResource) params.set('resource', selectedResource.key);
+    if (selectedAccelerator) params.set('accelerator', selectedAccelerator.key);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return `${base}${repoPath}${branch}${query}`;
+  }, [normalizedRepoUrl, repoBranch, repoUrlError, selectedResource, selectedAccelerator]);
 
   // Memoize quota calculations
   const { cost, canAfford, insufficientQuota, maxRuntime } = useMemo(() => {
