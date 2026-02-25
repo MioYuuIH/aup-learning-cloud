@@ -433,18 +433,27 @@ class RemoteLabKubeSpawner(KubeSpawner):
         name = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)
         return name or "repo"
 
+    def _get_home_mount_path(self, home_volume_name: str) -> str:
+        """Return the mountPath of the home volume from self.volume_mounts."""
+        for vm in self.volume_mounts:
+            if vm.get("name") == home_volume_name:
+                return vm["mountPath"]
+        return "/home/jovyan"
+
     def _build_git_init_container(
-        self, repo_url: str, repo_name: str, home_volume_name: str, repo_branch: str = ""
+        self,
+        repo_url: str,
+        repo_name: str,
+        home_volume_name: str,
+        home_mount_path: str,
+        repo_branch: str = "",
     ) -> dict:
         """
-        Build an init container spec that clones a repository onto the user's home PVC.
+        Build an init container spec that clones a repository into the home mount path.
 
         The init container mounts the same home PVC as the main container and clones
-        into /home/jovyan/<repo_name>. A preStop lifecycle hook on the main container
+        into <home_mount_path>/<repo_name>. A preStop lifecycle hook on the main container
         removes the directory when the session ends so it does not persist.
-
-        - git clone --depth 1 [--branch <branch>]; exits 1 on failure so spawn is aborted
-        - repo_branch: optional branch/tag to check out (empty = default branch)
 
         The script is read from core/scripts/git-clone.sh, base64-encoded and decoded
         at runtime to prevent KubeSpawner's _expand_all from treating shell braces as
@@ -454,7 +463,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
         with open(script_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
 
-        clone_dir = f"/home/jovyan/{repo_name}"
+        clone_dir = f"{home_mount_path}/{repo_name}"
 
         env = [
             {"name": "REPO_URL", "value": repo_url},
@@ -470,7 +479,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
             "imagePullPolicy": "IfNotPresent",
             "command": ["sh", "-c", f"echo {encoded} | base64 -d | sh"],
             "env": env,
-            "volumeMounts": [{"name": home_volume_name, "mountPath": "/home/jovyan"}],
+            "volumeMounts": [{"name": home_volume_name, "mountPath": home_mount_path}],
             "securityContext": {
                 "runAsUser": 1000,
                 "runAsNonRoot": True,
@@ -713,22 +722,21 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 try:
                     repo_name = self._extract_repo_name(sanitized_url)
 
-                    # Clone directly onto the user's home PVC. The init container
-                    # mounts the same volume as the main container and clones into
-                    # /home/jovyan/<repo_name>. A preStop hook cleans it up when
-                    # the session ends so the repo does not persist.
                     safe_username = self._expand_user_properties("{username}")
                     home_volume_name = f"volume-{safe_username}"
+                    home_mount_path = self._get_home_mount_path(home_volume_name)
                     init_container = self._build_git_init_container(
-                        sanitized_url, repo_name, home_volume_name, repo_branch
+                        sanitized_url, repo_name, home_volume_name, home_mount_path, repo_branch
                     )
                     self.init_containers = [init_container] + list(self.init_containers or [])
 
                     # preStop lifecycle hook: remove the cloned directory on session end
                     extra = dict(self.extra_container_config or {})
-                    extra["lifecycle"] = {"preStop": {"exec": {"command": ["rm", "-rf", f"/home/jovyan/{repo_name}"]}}}
+                    clone_dir = f"{home_mount_path}/{repo_name}"
+                    extra["lifecycle"] = {"preStop": {"exec": {"command": ["rm", "-rf", clone_dir]}}}
                     self.extra_container_config = extra
 
+                    self.notebook_dir = home_mount_path
                     self.default_url = f"/lab/tree/{repo_name}"
                     self._has_git_init_container = True
                     branch_info = f" (branch: {repo_branch})" if repo_branch else ""
