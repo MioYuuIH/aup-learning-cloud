@@ -770,9 +770,7 @@ class GitSpawnHandler(BaseHandler):
         except Exception as e:
             raise web.HTTPError(400, "Invalid repository URL") from e
 
-        is_allowed = any(
-            hostname == p or hostname.endswith("." + p) for p in allowed_providers
-        )
+        is_allowed = any(hostname == p or hostname.endswith("." + p) for p in allowed_providers)
         if not is_allowed:
             raise web.HTTPError(403, f"Repository host '{hostname}' is not allowed")
 

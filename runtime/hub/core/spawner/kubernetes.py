@@ -393,30 +393,31 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
             # Strip /tree/<branch> path component
             path = parsed.path
-            tree_match = re.match(r'^(/[^/]+/[^/]+)/tree/.+$', path)
+            tree_match = re.match(r"^(/[^/]+/[^/]+)/tree/.+$", path)
             if tree_match:
                 path = tree_match.group(1)
 
             # Strip .git suffix
-            if path.endswith('.git'):
+            if path.endswith(".git"):
                 path = path[:-4]
 
             # Reconstruct without query/fragment
             from urllib.parse import urlunparse
-            url = urlunparse((parsed.scheme, parsed.netloc, path, '', '', ''))
+
+            url = urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
 
         except Exception as e:
             return False, f"URL parsing error: {e}", ""
 
         hostname = parsed.netloc.lower()
         is_whitelisted = any(
-            hostname == provider or hostname.endswith('.' + provider) for provider in self.ALLOWED_GIT_PROVIDERS
+            hostname == provider or hostname.endswith("." + provider) for provider in self.ALLOWED_GIT_PROVIDERS
         )
 
         if not is_whitelisted:
             return False, f"Repository host '{hostname}' not authorized", ""
 
-        dangerous_patterns = [';', '||', '&&', '$(', '`', '\n', '\r']
+        dangerous_patterns = [";", "||", "&&", "$(", "`", "\n", "\r"]
         if any(pat in url for pat in dangerous_patterns):
             return False, "URL contains suspicious characters", ""
 
@@ -424,11 +425,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
     def _extract_repo_name(self, url: str) -> str:
         """Extract and sanitize a directory name from a git repo URL."""
-        path = urlparse(url).path.rstrip('/')
-        name = path.split('/')[-1]
-        if name.endswith('.git'):
+        path = urlparse(url).path.rstrip("/")
+        name = path.split("/")[-1]
+        if name.endswith(".git"):
             name = name[:-4]
-        name = re.sub(r'[^a-zA-Z0-9_.-]', '_', name)
+        name = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)
         return name or "repo"
 
     def _build_git_init_container(
@@ -694,12 +695,12 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
         # Extract branch from URL path if not provided separately (e.g. /owner/repo/tree/main)
         if repo_url and not repo_branch:
-            tree_match = re.match(r'^https?://[^/]+/[^/]+/[^/]+/tree/(.+)$', repo_url)
+            tree_match = re.match(r"^https?://[^/]+/[^/]+/[^/]+/tree/(.+)$", repo_url)
             if tree_match:
                 repo_branch = tree_match.group(1)
 
         # Sanitize branch name: allow only safe characters
-        if repo_branch and not re.match(r'^[a-zA-Z0-9_./-]+$', repo_branch):
+        if repo_branch and not re.match(r"^[a-zA-Z0-9_./-]+$", repo_branch):
             self.log.warning(f"Invalid branch name for user {self.user.name}: {repo_branch!r}")
             repo_branch = ""
 
@@ -724,19 +725,15 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
                     # preStop lifecycle hook: remove the cloned directory on session end
                     extra = dict(self.extra_container_config or {})
-                    extra["lifecycle"] = {
-                        "preStop": {
-                            "exec": {
-                                "command": ["rm", "-rf", f"/home/jovyan/{repo_name}"]
-                            }
-                        }
-                    }
+                    extra["lifecycle"] = {"preStop": {"exec": {"command": ["rm", "-rf", f"/home/jovyan/{repo_name}"]}}}
                     self.extra_container_config = extra
 
                     self.default_url = f"/lab/tree/{repo_name}"
                     self._has_git_init_container = True
                     branch_info = f" (branch: {repo_branch})" if repo_branch else ""
-                    self.log.info(f"Configured git init container for {self.user.name}: {sanitized_url} -> ~/{repo_name}{branch_info}")
+                    self.log.info(
+                        f"Configured git init container for {self.user.name}: {sanitized_url} -> ~/{repo_name}{branch_info}"
+                    )
                 except Exception as e:
                     self.log.warning(f"Failed to configure git init container: {e}")
 
