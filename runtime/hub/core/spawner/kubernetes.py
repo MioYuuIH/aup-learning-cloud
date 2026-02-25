@@ -687,6 +687,12 @@ class RemoteLabKubeSpawner(KubeSpawner):
             )
             repo_url = ""
 
+        # Extract branch from URL path if not provided separately (e.g. /owner/repo/tree/main)
+        if repo_url and not repo_branch:
+            tree_match = re.match(r'^https?://[^/]+/[^/]+/[^/]+/tree/(.+)$', repo_url)
+            if tree_match:
+                repo_branch = tree_match.group(1)
+
         # Sanitize branch name: allow only safe characters
         if repo_branch and not re.match(r'^[a-zA-Z0-9_./-]+$', repo_branch):
             self.log.warning(f"Invalid branch name for user {self.user.name}: {repo_branch!r}")

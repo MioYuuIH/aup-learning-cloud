@@ -104,8 +104,8 @@ function App() {
   const [repoUrlError, setRepoUrlError] = useState('');
   const [paramWarning, setParamWarning] = useState('');
 
-  // Derive normalized URL and branch from raw input without modifying displayed text
-  const { url: normalizedRepoUrl, branch: repoBranch } = useMemo(
+  // Derive branch from raw input for display hint (normalization happens server-side)
+  const { branch: repoBranch } = useMemo(
     () => normalizeRepoUrl(repoUrl),
     [repoUrl]
   );
@@ -257,8 +257,6 @@ function App() {
     <>
       {/* Hidden inputs for form submission */}
       <input type="hidden" name="resource_type" value={selectedResource?.key ?? ''} />
-      {normalizedRepoUrl && <input type="hidden" name="repo_url" value={normalizedRepoUrl} />}
-      {repoBranch && <input type="hidden" name="repo_branch" value={repoBranch} />}
       {selectedResource && (
         <input
           type="hidden"
@@ -324,6 +322,7 @@ function App() {
               <input
                 type="text"
                 id="repoUrlInput"
+                name="repo_url"
                 value={repoUrl}
                 onChange={e => {
                   setRepoUrl(e.target.value);
