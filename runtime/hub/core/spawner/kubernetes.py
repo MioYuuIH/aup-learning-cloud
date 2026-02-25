@@ -786,13 +786,22 @@ class RemoteLabKubeSpawner(KubeSpawner):
         Runs concurrently with super().start() so that a failed init container
         (e.g. git clone error) is detected without waiting for start_timeout.
         """
+        seen_running = False
         while True:
             await asyncio.sleep(3)
             reflector = getattr(self, "pod_reflector", None)
             if reflector is None:
                 continue
             pod = reflector.pods.get(ref_key)
-            if pod is not None and pod["status"]["phase"] == "Failed":
+            if pod is None:
+                continue
+            phase = pod["status"]["phase"]
+            # Wait until the pod has moved past Pending at least once,
+            # so we don't react to a stale Failed status from a previous pod.
+            if phase in ("Running", "Pending"):
+                seen_running = True
+                continue
+            if phase == "Failed" and seen_running:
                 raise RuntimeError(
                     "Server failed to start: the Git repository could not be cloned. "
                     "Verify the URL is correct and the repository is publicly accessible."
