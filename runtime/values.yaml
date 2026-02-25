@@ -186,7 +186,6 @@ custom:
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
-          - dgpu
         allowGitClone: true
       Course-CV:
         group: "COURSE"
