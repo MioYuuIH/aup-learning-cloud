@@ -227,6 +227,10 @@ function App() {
     setSelectedResource(resource);
   }, []);
 
+  const handleClearResource = useCallback(() => {
+    setSelectedResource(null);
+  }, []);
+
   const handleSelectAccelerator = useCallback((accelerator: Accelerator) => {
     setSelectedAcceleratorKey(accelerator.key);
   }, []);
@@ -314,6 +318,7 @@ function App() {
                 group={group}
                 selectedResource={selectedResource}
                 onSelectResource={handleSelectResource}
+                onClearResource={handleClearResource}
                 defaultExpanded={!initialResourceKey && !initialRepoUrl && !autostart && index === 0}
                 accelerators={accelerators}
                 selectedAccelerator={selectedAccelerator}

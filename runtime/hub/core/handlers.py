@@ -737,9 +737,12 @@ class ResourcesAPIHandler(APIHandler):
                 groups_dict[group_name] = []
             groups_dict[group_name].append(resource_data)
 
-        # Build groups list - sort alphabetically, but put OTHERS last
+        # Build groups list - sort alphabetically, but put CUSTOM REPO last
+        BOTTOM_GROUPS = {"OTHERS", "CUSTOM REPO"}
         groups_list = []
-        sorted_group_names = sorted(groups_dict.keys(), key=lambda x: (x == "OTHERS", x))
+        sorted_group_names = sorted(
+            groups_dict.keys(), key=lambda x: (x in BOTTOM_GROUPS, x)
+        )
         for group_name in sorted_group_names:
             groups_list.append(
                 {

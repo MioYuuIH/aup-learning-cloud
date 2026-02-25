@@ -25,6 +25,7 @@ interface Props {
   group: ResourceGroup;
   selectedResource: Resource | null;
   onSelectResource: (resource: Resource) => void;
+  onClearResource: () => void;
   defaultExpanded?: boolean;
   accelerators: Accelerator[];
   selectedAccelerator: Accelerator | null;
@@ -35,6 +36,7 @@ export const CategorySection = memo(function CategorySection({
   group,
   selectedResource,
   onSelectResource,
+  onClearResource,
   defaultExpanded = false,
   accelerators,
   selectedAccelerator,
@@ -55,8 +57,15 @@ export const CategorySection = memo(function CategorySection({
   }, [selectedResource, group.resources]);
 
   const toggleCollapsed = useCallback(() => {
-    setCollapsed(prev => !prev);
-  }, []);
+    setCollapsed(prev => {
+      // When collapsing, clear selection if the selected resource is in this group
+      if (!prev && selectedResource != null &&
+          group.resources.some(r => r.key === selectedResource.key)) {
+        onClearResource();
+      }
+      return !prev;
+    });
+  }, [selectedResource, group.resources, onClearResource]);
 
   // Use displayName from API, fallback to group name
   const displayName = group.displayName ?? group.name;
