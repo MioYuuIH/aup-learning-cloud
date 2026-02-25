@@ -179,15 +179,18 @@ function App() {
   }, [availableAccelerators, selectedAcceleratorKey]);
 
   const shareableUrl = useMemo(() => {
-    if (!normalizedRepoUrl || repoUrlError) return '';
-    const repoPath = normalizedRepoUrl.replace(/^https?:\/\//, '');
-    const branch = repoBranch ? `/tree/${repoBranch}` : '';
-    const base = window.location.href.replace(/\/spawn(\?.*)?$/, '/git/');
+    if (!selectedResource) return '';
     const params = new URLSearchParams();
-    if (selectedResource) params.set('resource', selectedResource.key);
+    params.set('resource', selectedResource.key);
     if (selectedAccelerator) params.set('accelerator', selectedAccelerator.key);
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return `${base}${repoPath}${branch}${query}`;
+    if (normalizedRepoUrl && !repoUrlError) {
+      const repoPath = normalizedRepoUrl.replace(/^https?:\/\//, '');
+      const branch = repoBranch ? `/tree/${repoBranch}` : '';
+      const base = window.location.href.replace(/\/spawn(\?.*)?$/, '/git/');
+      return `${base}${repoPath}${branch}?${params.toString()}`;
+    }
+    const spawnBase = window.location.href.replace(/\/spawn(\?.*)?$/, '/spawn');
+    return `${spawnBase}?${params.toString()}`;
   }, [normalizedRepoUrl, repoBranch, repoUrlError, selectedResource, selectedAccelerator]);
 
   // Memoize quota calculations
@@ -352,20 +355,6 @@ function App() {
               {repoUrlError && (
                 <small className="repo-url-error">{repoUrlError}</small>
               )}
-              {shareableUrl && (
-                <div className="shareable-link">
-                  <span className="shareable-link-label">Share link:</span>
-                  <code className="shareable-link-url">{shareableUrl}</code>
-                  <button
-                    type="button"
-                    className="shareable-link-copy"
-                    onClick={() => navigator.clipboard.writeText(shareableUrl)}
-                    title="Copy link"
-                  >
-                    Copy
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
@@ -395,6 +384,22 @@ function App() {
               </div>
             )}
           </div>
+
+          {/* Shareable link - available for all resources */}
+          {shareableUrl && (
+            <div className="shareable-link">
+              <span className="shareable-link-label">Share link:</span>
+              <code className="shareable-link-url">{shareableUrl}</code>
+              <button
+                type="button"
+                className="shareable-link-copy"
+                onClick={() => navigator.clipboard.writeText(shareableUrl)}
+                title="Copy link"
+              >
+                Copy
+              </button>
+            </div>
+          )}
 
           {/* Launch section */}
           <div className="launch-section">
