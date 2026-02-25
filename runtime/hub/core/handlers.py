@@ -29,6 +29,7 @@ Provides custom handlers for:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 from urllib.parse import urlencode, urlparse
@@ -807,6 +808,36 @@ class GitSpawnHandler(BaseHandler):
         self.redirect(spawn_url)
 
 
+class ValidateRepoHandler(APIHandler):
+    """API endpoint to validate a git repository URL via dulwich ls_remote."""
+
+    @web.authenticated
+    async def post(self):
+        body = json.loads(self.request.body)
+        url = (body.get("url") or "").strip()
+        if not url:
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"valid": False, "error": "URL is required"}))
+            return
+
+        loop = asyncio.get_event_loop()
+        try:
+            from dulwich.porcelain import ls_remote
+
+            await asyncio.wait_for(
+                loop.run_in_executor(None, ls_remote, url),
+                timeout=10,
+            )
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"valid": True, "error": ""}))
+        except asyncio.TimeoutError:
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"valid": False, "error": "Validation timed out"}))
+        except Exception:
+            self.set_header("Content-Type", "application/json")
+            self.finish(json.dumps({"valid": False, "error": "Repository not found or not accessible"}))
+
+
 # =============================================================================
 # Handler Registration
 # =============================================================================
@@ -833,6 +864,8 @@ def get_handlers() -> list[tuple[str, type]]:
         (r"/api/accelerators", AcceleratorsAPIHandler),
         # Resources API
         (r"/api/resources", ResourcesAPIHandler),
+        # Git repo validation API
+        (r"/api/validate-repo", ValidateRepoHandler),
         # Git spawn shortcut: /hub/git/github.com/owner/repo[?autostart=1&resource=cpu]
         (r"/git/(.*)", GitSpawnHandler),
         # Quota management API

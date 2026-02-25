@@ -19,6 +19,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { Resource, Accelerator } from '@auplc/shared';
+import { validateRepo } from '@auplc/shared';
 import { CategorySection } from './components/CategorySection';
 import { useResources } from './hooks/useResources';
 import { useAccelerators } from './hooks/useAccelerators';
@@ -112,7 +113,9 @@ function App() {
   const [runtimeInput, setRuntimeInput] = useState('20');
   const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
   const [repoUrlError, setRepoUrlError] = useState('');
+  const [repoValidating, setRepoValidating] = useState(false);
   const [paramWarning, setParamWarning] = useState('');
+  const validateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Derive branch and shareable /hub/git/ link from raw input
   const { branch: repoBranch, url: normalizedRepoUrl } = useMemo(
@@ -231,7 +234,7 @@ function App() {
         : 240,
     };
   }, [quota, selectedAccelerator?.quotaRate, runtime]);
-  const canStart = selectedResource && canAfford && !repoUrlError;
+  const canStart = selectedResource && canAfford && !repoUrlError && !repoValidating;
 
   // Memoize non-empty groups filter
   const nonEmptyGroups = useMemo(
@@ -256,7 +259,29 @@ function App() {
   const handleRepoUrlChange = useCallback((value: string) => {
     setRepoUrl(value);
     const { url } = normalizeRepoUrl(value);
-    setRepoUrlError(validateRepoUrl(url, allowedGitProviders));
+    const formatError = validateRepoUrl(url, allowedGitProviders);
+    setRepoUrlError(formatError);
+    setRepoValidating(false);
+
+    // Clear pending validation
+    if (validateTimerRef.current) clearTimeout(validateTimerRef.current);
+
+    // If format is valid and URL is non-empty, debounce remote validation
+    if (!formatError && url) {
+      setRepoValidating(true);
+      validateTimerRef.current = setTimeout(async () => {
+        try {
+          const result = await validateRepo(url);
+          if (!result.valid) {
+            setRepoUrlError(result.error);
+          }
+        } catch {
+          // API error — don't block the user
+        } finally {
+          setRepoValidating(false);
+        }
+      }, 800);
+    }
   }, [allowedGitProviders]);
 
   const handleSelectAccelerator = useCallback((accelerator: Accelerator) => {
@@ -354,6 +379,7 @@ function App() {
                 onSelectAccelerator={handleSelectAccelerator}
                 repoUrl={repoUrl}
                 repoUrlError={repoUrlError}
+                repoValidating={repoValidating}
                 repoBranch={repoBranch}
                 onRepoUrlChange={handleRepoUrlChange}
                 allowedGitProviders={allowedGitProviders}

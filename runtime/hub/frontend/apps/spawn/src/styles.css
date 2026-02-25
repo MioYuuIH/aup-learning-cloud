@@ -81,6 +81,7 @@ SOFTWARE.
 [data-bs-theme="dark"] .repo-url-tooltip { background: var(--dark-bg-primary) !important; color: var(--dark-text-primary) !important; }
 [data-bs-theme="dark"] .repo-url-tooltip::after { border-top-color: var(--dark-bg-primary) !important; }
 [data-bs-theme="dark"] .repo-url-error { color: #f8888e !important; }
+[data-bs-theme="dark"] .repo-url-validating { color: var(--dark-text-muted) !important; }
 [data-bs-theme="dark"] .repo-branch-hint { color: #7ec87a !important; }
 [data-bs-theme="dark"] .repo-branch-hint code { background: #1a3a18 !important; color: #7ec87a !important; }
 [data-bs-theme="dark"] .shareable-link { background: var(--dark-bg-tertiary) !important; border-color: var(--dark-border) !important; }
@@ -420,6 +421,14 @@ SOFTWARE.
 
 .repo-url-error {
     color: #dc3545;
+}
+
+.repo-url-validating {
+    display: block;
+    margin-top: 4px;
+    color: #6c757d;
+    font-size: 12px;
+    font-style: italic;
 }
 
 .repo-branch-hint {

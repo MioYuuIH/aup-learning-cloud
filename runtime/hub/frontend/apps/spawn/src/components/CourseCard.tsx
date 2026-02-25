@@ -29,6 +29,7 @@ interface Props {
   onSelectAccelerator: (accelerator: Accelerator) => void;
   repoUrl: string;
   repoUrlError: string;
+  repoValidating: boolean;
   repoBranch: string;
   onRepoUrlChange: (value: string) => void;
   allowedGitProviders: string[];
@@ -56,6 +57,7 @@ export const CourseCard = memo(function CourseCard({
   onSelectAccelerator,
   repoUrl,
   repoUrlError,
+  repoValidating,
   repoBranch,
   onRepoUrlChange,
   allowedGitProviders,
@@ -157,10 +159,13 @@ export const CourseCard = memo(function CourseCard({
             spellCheck={false}
             className={repoUrlError ? 'input-error' : ''}
           />
-          {repoBranch && !repoUrlError && (
+          {repoValidating && (
+            <small className="repo-url-validating">Checking repository...</small>
+          )}
+          {repoBranch && !repoUrlError && !repoValidating && (
             <small className="repo-branch-hint">Branch: <code>{repoBranch}</code></small>
           )}
-          {repoUrlError && (
+          {repoUrlError && !repoValidating && (
             <small className="repo-url-error">{repoUrlError}</small>
           )}
         </div>

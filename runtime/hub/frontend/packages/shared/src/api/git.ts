@@ -17,9 +17,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-export * from "./client.js";
-export * from "./users.js";
-export * from "./quota.js";
-export * from "./accelerators.js";
-export * from "./resources.js";
-export * from "./git.js";
+import { apiRequest } from "./client.js";
+
+export interface ValidateRepoResult {
+  valid: boolean;
+  error: string;
+}
+
+export async function validateRepo(url: string): Promise<ValidateRepoResult> {
+  return apiRequest<ValidateRepoResult>("/validate-repo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+}
