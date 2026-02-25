@@ -135,6 +135,10 @@ function App() {
     if (!target && (autostart || initialRepoUrl)) {
       target = resources.find(r => r.metadata?.allowGitClone);
     }
+    // Fallback: pre-selection was attempted but failed → select first resource
+    if (!target && (initialResourceKey || autostart || initialRepoUrl)) {
+      target = resources[0];
+    }
     if (target) {
       hasAutoSelected.current = true;
       setSelectedResource(target);
@@ -310,7 +314,7 @@ function App() {
                 group={group}
                 selectedResource={selectedResource}
                 onSelectResource={handleSelectResource}
-                defaultExpanded={index === 0}
+                defaultExpanded={!initialResourceKey && !initialRepoUrl && !autostart && index === 0}
                 accelerators={accelerators}
                 selectedAccelerator={selectedAccelerator}
                 onSelectAccelerator={handleSelectAccelerator}

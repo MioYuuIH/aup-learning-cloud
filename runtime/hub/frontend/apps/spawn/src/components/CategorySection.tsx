@@ -17,7 +17,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { useState, memo, useCallback } from 'react';
+import { useState, memo, useCallback, useEffect, useRef } from 'react';
 import type { Resource, ResourceGroup, Accelerator } from '@auplc/shared';
 import { CourseCard } from './CourseCard';
 
@@ -41,6 +41,18 @@ export const CategorySection = memo(function CategorySection({
   onSelectAccelerator,
 }: Props) {
   const [collapsed, setCollapsed] = useState(!defaultExpanded);
+
+  // Auto-expand once when a resource in this group is pre-selected (e.g. via URL param)
+  const hasAutoExpanded = useRef(false);
+  useEffect(() => {
+    if (hasAutoExpanded.current) return;
+    const groupContainsSelected = selectedResource != null &&
+      group.resources.some(r => r.key === selectedResource.key);
+    if (groupContainsSelected) {
+      hasAutoExpanded.current = true;
+      setCollapsed(false);
+    }
+  }, [selectedResource, group.resources]);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => !prev);
