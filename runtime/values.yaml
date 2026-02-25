@@ -120,6 +120,7 @@ custom:
     # Add new course images here
     images:
       cpu: "ghcr.io/amdresearch/auplc-default:latest"
+      gpu: "ghcr.io/amdresearch/auplc-default:latest"
       Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
       Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
       Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
@@ -133,6 +134,11 @@ custom:
         cpu: "2"
         memory: "4Gi"
         memory_limit: "6Gi"
+      gpu:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
       Course-CV:
         cpu: "4"
         memory: "16Gi"
@@ -172,6 +178,15 @@ custom:
         subDescription: "CPU Only Environment"
         accelerator: ""
         acceleratorKeys: []
+        allowGitClone: true
+      gpu:
+        group: "OTHERS"
+        description: "Basic GPU Environment"
+        subDescription: "GPU Accelerated Environment"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+          - dgpu
         allowGitClone: true
       Course-CV:
         group: "COURSE"
@@ -217,6 +232,7 @@ custom:
         - Course-PhySim
       official:
         - cpu
+        - gpu
         - Course-CV
         - Course-DL
         - Course-LLM
