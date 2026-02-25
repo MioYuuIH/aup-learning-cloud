@@ -17,7 +17,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { Resource, Accelerator } from '@auplc/shared';
 import { CategorySection } from './components/CategorySection';
 import { useResources } from './hooks/useResources';
@@ -42,19 +42,75 @@ function validateRepoUrl(url: string, allowedProviders: string[]): string {
 
 
 function App() {
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialRepoUrl = searchParams.get('repo_url') ?? '';
+  const autostart = searchParams.get('autostart') === '1';
+  const initialResourceKey = searchParams.get('resource') ?? '';
+  const initialAcceleratorKey = searchParams.get('accelerator') ?? '';
 
   const { resources, groups, allowedGitProviders, loading: resourcesLoading, error: resourcesError } = useResources();
   const { accelerators, loading: acceleratorsLoading } = useAccelerators();
   const { quota, loading: quotaLoading } = useQuota();
 
+  const autostartFired = useRef(false);
+
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [selectedAcceleratorKey, setSelectedAcceleratorKey] = useState<string | null>(null);
   const [runtime, setRuntime] = useState(20);
   const [runtimeInput, setRuntimeInput] = useState('20');
-  const [repoUrl, setRepoUrl] = useState('');
+  const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
   const [repoUrlError, setRepoUrlError] = useState('');
+  const [paramWarning, setParamWarning] = useState('');
 
   const loading = resourcesLoading || acceleratorsLoading || quotaLoading;
+
+  // Validate initial repo_url from query params once providers are loaded
+  useEffect(() => {
+    if (allowedGitProviders.length === 0 || !initialRepoUrl) return;
+    const err = validateRepoUrl(initialRepoUrl, allowedGitProviders);
+    if (err) setRepoUrlError(err);
+  }, [allowedGitProviders, initialRepoUrl]);
+
+  // Pre-select resource from query param or autostart default, then auto-submit if needed
+  const hasAutoSelected = useRef(false);
+  useEffect(() => {
+    if (resourcesLoading || resources.length === 0 || hasAutoSelected.current) return;
+
+    let target: Resource | undefined;
+    if (initialResourceKey) {
+      target = resources.find(r => r.key === initialResourceKey);
+      if (!target) {
+        setParamWarning(`Unknown resource '${initialResourceKey}', using default.`);
+      }
+    }
+    if (!target && (autostart || initialRepoUrl)) {
+      target = resources.find(r => r.metadata?.allowGitClone);
+    }
+    if (target) {
+      hasAutoSelected.current = true;
+      setSelectedResource(target);
+      if (initialAcceleratorKey) {
+        const validKeys = target.metadata?.acceleratorKeys ?? [];
+        if (validKeys.includes(initialAcceleratorKey)) {
+          setSelectedAcceleratorKey(initialAcceleratorKey);
+        } else if (initialAcceleratorKey) {
+          setParamWarning(`Unknown accelerator '${initialAcceleratorKey}' for this resource, using default.`);
+        }
+      }
+    }
+  }, [resources, resourcesLoading, initialResourceKey, initialAcceleratorKey, autostart, initialRepoUrl]);
+
+  // Auto-submit once resource is selected and form is ready
+  useEffect(() => {
+    if (!autostart || autostartFired.current) return;
+    if (!selectedResource || loading) return;
+    autostartFired.current = true;
+    // Brief delay to let the DOM settle before submitting
+    setTimeout(() => {
+      const form = document.getElementById('spawn_form') as HTMLFormElement | null;
+      form?.submit();
+    }, 300);
+  }, [autostart, selectedResource, loading]);
 
   // Compute available accelerators based on selected resource
   const availableAccelerators = useMemo(() => {
@@ -158,6 +214,13 @@ function App() {
           name={`gpu_selection_${selectedResource.key}`}
           value={selectedAccelerator?.key ?? ''}
         />
+      )}
+
+      {/* Invalid query param warning */}
+      {paramWarning && (
+        <div className="warning-box">
+          <strong>Warning:</strong> {paramWarning}
+        </div>
       )}
 
       {/* Insufficient quota warning */}

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from urllib.parse import urlencode, urlparse
 
 from jupyterhub.apihandlers import APIHandler
 from jupyterhub.handlers import BaseHandler
@@ -745,6 +746,52 @@ class ResourcesAPIHandler(APIHandler):
         )
 
 
+class GitSpawnHandler(BaseHandler):
+    """Handle /hub/git/<provider/owner/repo> URLs for direct repo spawning.
+
+    Validates the repository URL and redirects to the spawn page with the
+    repo URL pre-filled. Supports optional query parameters:
+      - autostart=1  : auto-select default resource and submit form immediately
+      - resource=<k> : pre-select a specific resource key
+    """
+
+    @web.authenticated
+    async def get(self, repo_path: str):
+        from core.config import HubConfig
+
+        config = HubConfig.get()
+        allowed_providers = list(config.git_clone.allowedProviders)
+
+        repo_url = f"https://{repo_path.rstrip('/')}"
+
+        try:
+            parsed = urlparse(repo_url)
+            hostname = parsed.netloc.lower()
+        except Exception:
+            raise web.HTTPError(400, "Invalid repository URL")
+
+        is_allowed = any(
+            hostname == p or hostname.endswith("." + p) for p in allowed_providers
+        )
+        if not is_allowed:
+            raise web.HTTPError(403, f"Repository host '{hostname}' is not allowed")
+
+        params: list[tuple[str, str]] = [("repo_url", repo_url)]
+        if self.get_argument("autostart", ""):
+            params.append(("autostart", "1"))
+        if resource := self.get_argument("resource", ""):
+            if resource not in config.resources.images:
+                raise web.HTTPError(400, f"Unknown resource: '{resource}'")
+            params.append(("resource", resource))
+        if accelerator := self.get_argument("accelerator", ""):
+            if accelerator not in config.accelerators:
+                raise web.HTTPError(400, f"Unknown accelerator: '{accelerator}'")
+            params.append(("accelerator", accelerator))
+
+        spawn_url = self.hub.base_url + "spawn?" + urlencode(params)
+        self.redirect(spawn_url)
+
+
 # =============================================================================
 # Handler Registration
 # =============================================================================
@@ -771,6 +818,8 @@ def get_handlers() -> list[tuple[str, type]]:
         (r"/api/accelerators", AcceleratorsAPIHandler),
         # Resources API
         (r"/api/resources", ResourcesAPIHandler),
+        # Git spawn shortcut: /hub/git/github.com/owner/repo[?autostart=1&resource=cpu]
+        (r"/git/(.*)", GitSpawnHandler),
         # Quota management API
         (r"/admin/api/quota/?", QuotaAPIHandler),
         (r"/admin/api/quota/batch", QuotaBatchAPIHandler),
