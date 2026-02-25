@@ -101,19 +101,21 @@ function App() {
   const [runtime, setRuntime] = useState(20);
   const [runtimeInput, setRuntimeInput] = useState('20');
   const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
-  const [repoBranch, setRepoBranch] = useState('');
   const [repoUrlError, setRepoUrlError] = useState('');
   const [paramWarning, setParamWarning] = useState('');
 
+  // Derive normalized URL and branch from raw input without modifying displayed text
+  const { url: normalizedRepoUrl, branch: repoBranch } = useMemo(
+    () => normalizeRepoUrl(repoUrl),
+    [repoUrl]
+  );
+
   const loading = resourcesLoading || acceleratorsLoading || quotaLoading;
 
-  // Normalize and validate initial repo_url from query params once providers are loaded
+  // Validate initial repo_url from query params once providers are loaded
   useEffect(() => {
-    if (!initialRepoUrl) return;
-    const { url, branch } = normalizeRepoUrl(initialRepoUrl);
-    if (url !== initialRepoUrl) setRepoUrl(url);
-    if (branch) setRepoBranch(branch);
-    if (allowedGitProviders.length === 0) return;
+    if (!initialRepoUrl || allowedGitProviders.length === 0) return;
+    const { url } = normalizeRepoUrl(initialRepoUrl);
     const err = validateRepoUrl(url, allowedGitProviders);
     if (err) setRepoUrlError(err);
   }, [allowedGitProviders, initialRepoUrl]);
@@ -255,6 +257,7 @@ function App() {
     <>
       {/* Hidden inputs for form submission */}
       <input type="hidden" name="resource_type" value={selectedResource?.key ?? ''} />
+      {normalizedRepoUrl && <input type="hidden" name="repo_url" value={normalizedRepoUrl} />}
       {repoBranch && <input type="hidden" name="repo_branch" value={repoBranch} />}
       {selectedResource && (
         <input
@@ -321,17 +324,10 @@ function App() {
               <input
                 type="text"
                 id="repoUrlInput"
-                name="repo_url"
                 value={repoUrl}
                 onChange={e => {
                   setRepoUrl(e.target.value);
-                  setRepoUrlError(validateRepoUrl(e.target.value, allowedGitProviders));
-                }}
-                onBlur={e => {
-                  if (!e.target.value.trim()) return;
-                  const { url, branch } = normalizeRepoUrl(e.target.value);
-                  setRepoUrl(url);
-                  setRepoBranch(branch);
+                  const { url } = normalizeRepoUrl(e.target.value);
                   setRepoUrlError(validateRepoUrl(url, allowedGitProviders));
                 }}
                 placeholder="https://github.com/owner/repo"
