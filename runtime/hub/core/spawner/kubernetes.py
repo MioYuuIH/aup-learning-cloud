@@ -408,16 +408,15 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
             url = urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
 
+            hostname = parsed.netloc.lower()
+            is_whitelisted = any(
+                hostname == provider or hostname.endswith("." + provider) for provider in self.ALLOWED_GIT_PROVIDERS
+            )
+            if not is_whitelisted:
+                return False, f"Repository host '{hostname}' not authorized", ""
+
         except Exception as e:
             return False, f"URL parsing error: {e}", ""
-
-        hostname = parsed.netloc.lower()
-        is_whitelisted = any(
-            hostname == provider or hostname.endswith("." + provider) for provider in self.ALLOWED_GIT_PROVIDERS
-        )
-
-        if not is_whitelisted:
-            return False, f"Repository host '{hostname}' not authorized", ""
 
         dangerous_patterns = [";", "||", "&&", "$(", "`", "\n", "\r"]
         if any(pat in url for pat in dangerous_patterns):
