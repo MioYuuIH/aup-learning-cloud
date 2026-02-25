@@ -46,17 +46,11 @@ function normalizeRepoUrl(raw: string): { url: string; branch: string } {
     const parsed = new URL(s);
     let path = parsed.pathname;
 
-    // Strip /tree/<branch> or /blob/<branch>/... (GitHub/GitLab style)
-    const branchMatch = path.match(/^(\/[^/]+\/[^/]+)\/(?:tree|blob)\/([^/]+)(\/.*)?$/);
-    if (branchMatch) {
-      path = branchMatch[1];
-      branch = branchMatch[2];
-    }
-
-    // Strip non-repo sub-paths (pull, issues, actions, commits, etc.)
-    const subpathMatch = path.match(/^(\/[^/]+\/[^/]+)\/(?:pull|pulls|issues|actions|commits|releases|wiki|compare|settings)\b/);
-    if (subpathMatch) {
-      path = subpathMatch[1];
+    // Strip /tree/<branch> (GitHub: /owner/repo/tree/main)
+    const treeMatch = path.match(/^(\/[^/]+\/[^/]+)\/tree\/(.+)$/);
+    if (treeMatch) {
+      path = treeMatch[1];
+      branch = treeMatch[2];
     }
 
     if (path.endsWith('.git')) {
@@ -83,9 +77,6 @@ function validateRepoUrl(url: string, allowedProviders: string[]): string {
       p => hostname === p || hostname.endsWith('.' + p)
     );
     if (!allowed) return `Host not allowed. Supported: ${allowedProviders.join(', ')}.`;
-    // Must have at least /owner/repo
-    const segments = parsed.pathname.replace(/\/$/, '').split('/').filter(Boolean);
-    if (segments.length < 2) return 'URL must include owner and repository name.';
   } catch {
     return 'Invalid URL format.';
   }
@@ -258,7 +249,7 @@ function App() {
 
   const handleRepoUrlChange = useCallback((value: string) => {
     setRepoUrl(value);
-    const { url } = normalizeRepoUrl(value);
+    const { url, branch } = normalizeRepoUrl(value);
     const formatError = validateRepoUrl(url, allowedGitProviders);
     setRepoUrlError(formatError);
     setRepoValidating(false);
@@ -271,7 +262,7 @@ function App() {
       setRepoValidating(true);
       validateTimerRef.current = setTimeout(async () => {
         try {
-          const result = await validateRepo(url);
+          const result = await validateRepo(url, branch || undefined);
           if (!result.valid) {
             setRepoUrlError(result.error);
           }

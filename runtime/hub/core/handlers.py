@@ -809,33 +809,35 @@ class GitSpawnHandler(BaseHandler):
 
 
 class ValidateRepoHandler(APIHandler):
-    """API endpoint to validate a git repository URL via dulwich ls_remote."""
+    """Validate a git repository URL (and optional branch) via dulwich ls_remote."""
 
     @web.authenticated
     async def post(self):
         body = json.loads(self.request.body)
         url = (body.get("url") or "").strip()
-        if not url:
-            self.set_header("Content-Type", "application/json")
-            self.finish(json.dumps({"valid": False, "error": "URL is required"}))
-            return
+        branch = (body.get("branch") or "").strip()
+        result = {"valid": False, "error": "URL is required"}
+        if url:
+            try:
+                from dulwich.porcelain import ls_remote
 
-        loop = asyncio.get_event_loop()
-        try:
-            from dulwich.porcelain import ls_remote
-
-            await asyncio.wait_for(
-                loop.run_in_executor(None, ls_remote, url),
-                timeout=10,
-            )
-            self.set_header("Content-Type", "application/json")
-            self.finish(json.dumps({"valid": True, "error": ""}))
-        except asyncio.TimeoutError:
-            self.set_header("Content-Type", "application/json")
-            self.finish(json.dumps({"valid": False, "error": "Validation timed out"}))
-        except Exception:
-            self.set_header("Content-Type", "application/json")
-            self.finish(json.dumps({"valid": False, "error": "Repository not found or not accessible"}))
+                refs = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, ls_remote, url),
+                    timeout=10,
+                )
+                if branch:
+                    ref_key = f"refs/heads/{branch}".encode()
+                    tag_key = f"refs/tags/{branch}".encode()
+                    if ref_key not in refs and tag_key not in refs:
+                        result = {"valid": False, "error": f"Branch '{branch}' not found"}
+                    else:
+                        result = {"valid": True, "error": ""}
+                else:
+                    result = {"valid": True, "error": ""}
+            except Exception:
+                result = {"valid": False, "error": "Repository not found or not accessible"}
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps(result))
 
 
 # =============================================================================

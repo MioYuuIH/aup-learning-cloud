@@ -24,10 +24,10 @@ export interface ValidateRepoResult {
   error: string;
 }
 
-export async function validateRepo(url: string): Promise<ValidateRepoResult> {
+export async function validateRepo(url: string, branch?: string): Promise<ValidateRepoResult> {
   return apiRequest<ValidateRepoResult>("/validate-repo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, branch }),
   });
 }
