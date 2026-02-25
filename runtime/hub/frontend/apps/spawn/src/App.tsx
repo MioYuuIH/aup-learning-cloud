@@ -104,11 +104,19 @@ function App() {
   const [repoUrlError, setRepoUrlError] = useState('');
   const [paramWarning, setParamWarning] = useState('');
 
-  // Derive branch from raw input for display hint (normalization happens server-side)
-  const { branch: repoBranch } = useMemo(
+  // Derive branch and shareable /hub/git/ link from raw input
+  const { branch: repoBranch, url: normalizedRepoUrl } = useMemo(
     () => normalizeRepoUrl(repoUrl),
     [repoUrl]
   );
+
+  const shareableUrl = useMemo(() => {
+    if (!normalizedRepoUrl || repoUrlError) return '';
+    const repoPath = normalizedRepoUrl.replace(/^https?:\/\//, '');
+    const branch = repoBranch ? `/tree/${repoBranch}` : '';
+    const base = window.location.href.replace(/\/spawn(\?.*)?$/, '/git/');
+    return `${base}${repoPath}${branch}`;
+  }, [normalizedRepoUrl, repoBranch, repoUrlError]);
 
   const loading = resourcesLoading || acceleratorsLoading || quotaLoading;
 
@@ -339,6 +347,20 @@ function App() {
               )}
               {repoUrlError && (
                 <small className="repo-url-error">{repoUrlError}</small>
+              )}
+              {shareableUrl && (
+                <div className="shareable-link">
+                  <span className="shareable-link-label">Share link:</span>
+                  <code className="shareable-link-url">{shareableUrl}</code>
+                  <button
+                    type="button"
+                    className="shareable-link-copy"
+                    onClick={() => navigator.clipboard.writeText(shareableUrl)}
+                    title="Copy link"
+                  >
+                    Copy
+                  </button>
+                </div>
               )}
             </div>
           )}
