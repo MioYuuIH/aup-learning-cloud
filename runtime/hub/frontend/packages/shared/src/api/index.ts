@@ -22,3 +22,4 @@ export * from "./users.js";
 export * from "./quota.js";
 export * from "./accelerators.js";
 export * from "./resources.js";
+export * from "./git.js";

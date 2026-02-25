@@ -17,26 +17,165 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { Resource, Accelerator } from '@auplc/shared';
+import { validateRepo } from '@auplc/shared';
 import { CategorySection } from './components/CategorySection';
 import { useResources } from './hooks/useResources';
 import { useAccelerators } from './hooks/useAccelerators';
 import { useQuota } from './hooks/useQuota';
 
+/**
+ * Normalize a repo URL typed by the user:
+ * - Trims whitespace
+ * - Prepends https:// if no protocol is present
+ * - Strips /tree/<branch> (GitHub/GitLab style) and returns branch separately
+ * - Strips trailing .git suffix
+ * Returns { url, branch } where url is the clean clone URL.
+ */
+function normalizeRepoUrl(raw: string): { url: string; branch: string } {
+  let s = raw.trim();
+  if (!s) return { url: '', branch: '' };
+
+  if (!s.includes('://')) {
+    s = 'https://' + s;
+  }
+
+  let branch = '';
+  try {
+    const parsed = new URL(s);
+    let path = parsed.pathname;
+
+    // Strip /tree/<branch> (GitHub: /owner/repo/tree/main)
+    const treeMatch = path.match(/^(\/[^/]+\/[^/]+)\/tree\/(.+)$/);
+    if (treeMatch) {
+      path = treeMatch[1];
+      branch = treeMatch[2];
+    }
+
+    if (path.endsWith('.git')) {
+      path = path.slice(0, -4);
+    }
+
+    parsed.pathname = path;
+    // Remove any query string or hash that may have been pasted
+    parsed.search = '';
+    parsed.hash = '';
+    return { url: parsed.toString(), branch };
+  } catch {
+    return { url: s, branch: '' };
+  }
+}
+
+function validateRepoUrl(url: string, allowedProviders: string[]): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return 'Only HTTPS URLs are supported.';
+    const hostname = parsed.hostname.toLowerCase();
+    const allowed = allowedProviders.length === 0 || allowedProviders.some(
+      p => hostname === p || hostname.endsWith('.' + p)
+    );
+    if (!allowed) return `Host not allowed. Supported: ${allowedProviders.join(', ')}.`;
+  } catch {
+    return 'Invalid URL format.';
+  }
+  return '';
+}
+
 
 function App() {
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialRepoUrl = searchParams.get('repo_url') ?? '';
+  const autostart = searchParams.get('autostart') === '1';
+  const initialResourceKey = searchParams.get('resource') ?? '';
+  const initialAcceleratorKey = searchParams.get('accelerator') ?? '';
 
-  const { resources, groups, loading: resourcesLoading, error: resourcesError } = useResources();
+  const { resources, groups, allowedGitProviders, loading: resourcesLoading, error: resourcesError } = useResources();
   const { accelerators, loading: acceleratorsLoading } = useAccelerators();
   const { quota, loading: quotaLoading } = useQuota();
 
+  const autostartFired = useRef(false);
+
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [selectedAcceleratorKey, setSelectedAcceleratorKey] = useState<string | null>(null);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [runtime, setRuntime] = useState(20);
   const [runtimeInput, setRuntimeInput] = useState('20');
+  const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
+  const [repoUrlError, setRepoUrlError] = useState('');
+  const [repoValidating, setRepoValidating] = useState(false);
+  const [repoValid, setRepoValid] = useState(false);
+  const [paramWarning, setParamWarning] = useState('');
+  const validateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Derive branch and shareable /hub/git/ link from raw input
+  const { branch: repoBranch, url: normalizedRepoUrl } = useMemo(
+    () => normalizeRepoUrl(repoUrl),
+    [repoUrl]
+  );
 
   const loading = resourcesLoading || acceleratorsLoading || quotaLoading;
+
+  // Validate initial repo_url from query params once providers are loaded
+  useEffect(() => {
+    if (!initialRepoUrl || allowedGitProviders.length === 0) return;
+    const { url } = normalizeRepoUrl(initialRepoUrl);
+    const err = validateRepoUrl(url, allowedGitProviders);
+    if (err) setRepoUrlError(err);
+  }, [allowedGitProviders, initialRepoUrl]);
+
+  // Pre-select resource from query param or autostart default, then auto-submit if needed
+  const hasAutoSelected = useRef(false);
+  useEffect(() => {
+    if (resourcesLoading || resources.length === 0 || hasAutoSelected.current) return;
+
+    let target: Resource | undefined;
+    if (initialResourceKey) {
+      target = resources.find(r => r.key === initialResourceKey);
+      if (!target) {
+        setParamWarning(`Unknown resource '${initialResourceKey}', using default.`);
+      }
+    }
+    if (!target && (autostart || initialRepoUrl)) {
+      target = resources.find(r => r.metadata?.allowGitClone);
+    }
+    // Fallback: pre-selection was attempted but failed → select first resource
+    if (!target && (initialResourceKey || autostart || initialRepoUrl)) {
+      target = resources[0];
+    }
+    if (target) {
+      hasAutoSelected.current = true;
+      setSelectedResource(target);
+      // Expand the group containing the pre-selected resource
+      const targetGroup = groups.find(g => g.resources.some(r => r.key === target!.key));
+      if (targetGroup) setExpandedGroup(targetGroup.name);
+      if (initialAcceleratorKey) {
+        const validKeys = target.metadata?.acceleratorKeys ?? [];
+        if (validKeys.includes(initialAcceleratorKey)) {
+          setSelectedAcceleratorKey(initialAcceleratorKey);
+        } else if (initialAcceleratorKey) {
+          setParamWarning(`Unknown accelerator '${initialAcceleratorKey}' for this resource, using default.`);
+        }
+      }
+    } else {
+      // Default: expand the first group
+      const firstGroup = groups.find(g => g.resources.length > 0);
+      if (firstGroup) setExpandedGroup(firstGroup.name);
+    }
+  }, [resources, groups, resourcesLoading, initialResourceKey, initialAcceleratorKey, autostart, initialRepoUrl]);
+
+  // Auto-submit once resource is selected and form is ready
+  useEffect(() => {
+    if (!autostart || autostartFired.current) return;
+    if (!selectedResource || loading) return;
+    autostartFired.current = true;
+    // Brief delay to let the DOM settle before submitting
+    setTimeout(() => {
+      const form = document.getElementById('spawn_form') as HTMLFormElement | null;
+      form?.submit();
+    }, 300);
+  }, [autostart, selectedResource, loading]);
 
   // Compute available accelerators based on selected resource
   const availableAccelerators = useMemo(() => {
@@ -55,6 +194,23 @@ function App() {
     return userSelected ?? availableAccelerators[0];
   }, [availableAccelerators, selectedAcceleratorKey]);
 
+  const allowGitClone = selectedResource?.metadata?.allowGitClone ?? false;
+
+  const shareableUrl = useMemo(() => {
+    if (!selectedResource) return '';
+    const params = new URLSearchParams();
+    params.set('resource', selectedResource.key);
+    if (selectedAccelerator) params.set('accelerator', selectedAccelerator.key);
+    if (allowGitClone && normalizedRepoUrl && !repoUrlError) {
+      const repoPath = normalizedRepoUrl.replace(/^https?:\/\//, '');
+      const branch = repoBranch ? `/tree/${repoBranch}` : '';
+      const base = window.location.href.replace(/\/spawn(\/[^?]*)?(\?.*)?$/, '/git/');
+      return `${base}${repoPath}${branch}?${params.toString()}`;
+    }
+    const spawnBase = window.location.href.replace(/\/spawn(\/[^?]*)?(\?.*)?$/, '/spawn');
+    return `${spawnBase}?${params.toString()}`;
+  }, [normalizedRepoUrl, repoBranch, repoUrlError, allowGitClone, selectedResource, selectedAccelerator]);
+
   // Memoize quota calculations
   const { cost, canAfford, insufficientQuota, maxRuntime } = useMemo(() => {
     const rate = selectedAccelerator?.quotaRate ?? quota?.rates?.cpu ?? 1;
@@ -70,8 +226,7 @@ function App() {
         : 240,
     };
   }, [quota, selectedAccelerator?.quotaRate, runtime]);
-
-  const canStart = selectedResource && canAfford;
+  const canStart = selectedResource && canAfford && !repoUrlError && !repoValidating;
 
   // Memoize non-empty groups filter
   const nonEmptyGroups = useMemo(
@@ -79,10 +234,50 @@ function App() {
     [groups]
   );
 
+  // Accordion: toggle group, only one open at a time
+  const handleToggleGroup = useCallback((groupName: string) => {
+    setExpandedGroup(prev => prev === groupName ? null : groupName);
+  }, []);
+
   // Memoize callbacks to prevent child re-renders
   const handleSelectResource = useCallback((resource: Resource) => {
     setSelectedResource(resource);
   }, []);
+
+  const handleClearResource = useCallback(() => {
+    setSelectedResource(null);
+  }, []);
+
+  const handleRepoUrlChange = useCallback((value: string) => {
+    setRepoUrl(value);
+    const { url, branch } = normalizeRepoUrl(value);
+    const formatError = validateRepoUrl(url, allowedGitProviders);
+    setRepoUrlError(formatError);
+    setRepoValidating(false);
+    setRepoValid(false);
+
+    // Clear pending validation
+    if (validateTimerRef.current) clearTimeout(validateTimerRef.current);
+
+    // If format is valid and URL is non-empty, debounce remote validation
+    if (!formatError && url) {
+      setRepoValidating(true);
+      validateTimerRef.current = setTimeout(async () => {
+        try {
+          const result = await validateRepo(url, branch || undefined);
+          if (result.valid) {
+            setRepoValid(true);
+          } else {
+            setRepoUrlError(result.error);
+          }
+        } catch {
+          // API error — don't block the user
+        } finally {
+          setRepoValidating(false);
+        }
+      }, 800);
+    }
+  }, [allowedGitProviders]);
 
   const handleSelectAccelerator = useCallback((accelerator: Accelerator) => {
     setSelectedAcceleratorKey(accelerator.key);
@@ -141,6 +336,13 @@ function App() {
         />
       )}
 
+      {/* Invalid query param warning */}
+      {paramWarning && (
+        <div className="warning-box">
+          <strong>Warning:</strong> {paramWarning}
+        </div>
+      )}
+
       {/* Insufficient quota warning */}
       {insufficientQuota && (
         <div className="warning-box">
@@ -158,16 +360,25 @@ function App() {
       ) : (
         <>
           <div id="resourceList">
-            {nonEmptyGroups.map((group, index) => (
+            {nonEmptyGroups.map((group) => (
               <CategorySection
                 key={group.name}
                 group={group}
+                expanded={expandedGroup === group.name}
+                onToggle={handleToggleGroup}
                 selectedResource={selectedResource}
                 onSelectResource={handleSelectResource}
-                defaultExpanded={index === 0}
+                onClearResource={handleClearResource}
                 accelerators={accelerators}
                 selectedAccelerator={selectedAccelerator}
                 onSelectAccelerator={handleSelectAccelerator}
+                repoUrl={repoUrl}
+                repoUrlError={repoUrlError}
+                repoValidating={repoValidating}
+                repoValid={repoValid}
+                repoBranch={repoBranch}
+                onRepoUrlChange={handleRepoUrlChange}
+                allowedGitProviders={allowedGitProviders}
               />
             ))}
           </div>
@@ -198,6 +409,22 @@ function App() {
               </div>
             )}
           </div>
+
+          {/* Shareable link - available for all resources */}
+          {shareableUrl && (
+            <div className="shareable-link">
+              <span className="shareable-link-label">Share link:</span>
+              <code className="shareable-link-url">{shareableUrl}</code>
+              <button
+                type="button"
+                className="shareable-link-copy"
+                onClick={() => navigator.clipboard.writeText(shareableUrl)}
+                title="Copy link"
+              >
+                Copy
+              </button>
+            </div>
+          )}
 
           {/* Launch section */}
           <div className="launch-section">

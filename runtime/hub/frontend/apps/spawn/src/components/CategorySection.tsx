@@ -17,43 +17,64 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { useState, memo, useCallback } from 'react';
+import { memo, useCallback } from 'react';
 import type { Resource, ResourceGroup, Accelerator } from '@auplc/shared';
 import { CourseCard } from './CourseCard';
 
 interface Props {
   group: ResourceGroup;
+  expanded: boolean;
+  onToggle: (groupName: string) => void;
   selectedResource: Resource | null;
   onSelectResource: (resource: Resource) => void;
-  defaultExpanded?: boolean;
+  onClearResource: () => void;
   accelerators: Accelerator[];
   selectedAccelerator: Accelerator | null;
   onSelectAccelerator: (accelerator: Accelerator) => void;
+  repoUrl: string;
+  repoUrlError: string;
+  repoValidating: boolean;
+  repoValid: boolean;
+  repoBranch: string;
+  onRepoUrlChange: (value: string) => void;
+  allowedGitProviders: string[];
 }
 
 export const CategorySection = memo(function CategorySection({
   group,
+  expanded,
+  onToggle,
   selectedResource,
   onSelectResource,
-  defaultExpanded = false,
+  onClearResource,
   accelerators,
   selectedAccelerator,
   onSelectAccelerator,
+  repoUrl,
+  repoUrlError,
+  repoValidating,
+  repoValid,
+  repoBranch,
+  onRepoUrlChange,
+  allowedGitProviders,
 }: Props) {
-  const [collapsed, setCollapsed] = useState(!defaultExpanded);
-
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed(prev => !prev);
-  }, []);
+  const handleToggle = useCallback(() => {
+    // When collapsing, clear selection if the selected resource is in this group
+    if (expanded && selectedResource != null &&
+        group.resources.some(r => r.key === selectedResource.key)) {
+      onClearResource();
+    }
+    onToggle(group.name);
+  }, [expanded, selectedResource, group.resources, group.name, onClearResource, onToggle]);
 
   // Use displayName from API, fallback to group name
   const displayName = group.displayName ?? group.name;
 
   return (
-    <div className={`resource-category ${collapsed ? 'collapsed' : ''}`}>
+    <div className={`resource-category ${expanded ? '' : 'collapsed'}`}>
       <div
         className="resource-category-header"
-        onClick={toggleCollapsed}
+        onClick={handleToggle}
       >
         <h5>📂 {displayName}</h5>
         <span className="collapse-icon">▼</span>
@@ -68,6 +89,13 @@ export const CategorySection = memo(function CategorySection({
             accelerators={accelerators}
             selectedAccelerator={selectedAccelerator}
             onSelectAccelerator={onSelectAccelerator}
+            repoUrl={repoUrl}
+            repoUrlError={repoUrlError}
+            repoValidating={repoValidating}
+            repoValid={repoValid}
+            repoBranch={repoBranch}
+            onRepoUrlChange={onRepoUrlChange}
+            allowedGitProviders={allowedGitProviders}
           />
         ))}
       </div>

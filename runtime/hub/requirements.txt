@@ -3,3 +3,4 @@ jupyterhub-multiauthenticator
 jupyterhub-firstuseauthenticator
 pydantic
 pyyaml
+dulwich

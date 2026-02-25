@@ -26,12 +26,14 @@ Provides RemoteLabKubeSpawner for Kubernetes-based deployments.
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import json
 import os
 import re
 import time
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 import aiohttp
 from jupyterhub.user import User as JupyterHubUser
@@ -91,6 +93,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
     default_quota: int = 0
     minimum_quota_to_start: int = 10
 
+    # Repository cloning configuration (populated from HubConfig.git_clone)
+    ALLOWED_GIT_PROVIDERS: set[str] = set()
+    MAX_CLONE_TIMEOUT: int = 0
+    GIT_INIT_CONTAINER_IMAGE: str = ""
+
     @classmethod
     def configure_from_config(cls, config: HubConfig) -> None:
         """
@@ -99,6 +106,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
         This should be called during initialization to inject configuration.
         """
         cls._hub_config = config
+
+        # Basic spawner settings
+        cls.auth_mode = config.auth_mode
+        cls.single_node_mode = config.single_node_mode
+        cls.github_org_name = config.github_org_name
 
         # Extract resource images and requirements
         cls.resource_images = dict(config.resources.images)
@@ -119,6 +131,12 @@ class RemoteLabKubeSpawner(KubeSpawner):
         cls.default_quota = config.quota.defaultQuota
         cls.minimum_quota_to_start = config.quota.minimumToStart
         cls.quota_enabled = config.quota.enabled
+
+        # Extract git clone settings (single source of truth: GitCloneSettings)
+        git_config = config.git_clone
+        cls.GIT_INIT_CONTAINER_IMAGE = git_config.initContainerImage
+        cls.ALLOWED_GIT_PROVIDERS = set(git_config.allowedProviders)
+        cls.MAX_CLONE_TIMEOUT = git_config.maxCloneTimeout
 
     async def get_user_teams(self) -> list[str]:
         """
@@ -323,7 +341,156 @@ class RemoteLabKubeSpawner(KubeSpawner):
             f"User selected resource: {resource_type} with GPU: {gpu_selection} for {runtime_minutes} minutes"
         )
 
+        # Optional repository cloning fields (do not break existing forms)
+        try:
+            repo_url = formdata.get("repo_url", [""])[0].strip()
+        except Exception:
+            repo_url = ""
+
+        try:
+            access_token = formdata.get("access_token", [""])[0].strip()
+        except Exception:
+            access_token = ""
+
+        try:
+            repo_branch = formdata.get("repo_branch", [""])[0].strip()
+        except Exception:
+            repo_branch = ""
+
+        if repo_url:
+            options["repo_url"] = repo_url
+        if repo_branch:
+            options["repo_branch"] = repo_branch
+        if access_token:
+            options["access_token"] = access_token
+
         return options
+
+    def _validate_and_sanitize_repo_url(self, url: str) -> tuple[bool, str, str]:
+        """
+        Validate and normalize a repository URL.
+        Returns (is_valid, error_message, sanitized_url).
+        Empty/blank URLs return (True, "", "").
+
+        Normalization applied (mirrors frontend logic):
+        - Prepends https:// if no scheme present
+        - Strips /tree/<branch> path component
+        - Strips trailing .git suffix
+        """
+        if not url or not str(url).strip():
+            return True, "", ""
+
+        url = str(url).strip()
+
+        # Prepend https:// if no scheme
+        if "://" not in url:
+            url = "https://" + url
+
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ["http", "https"]:
+                return False, "Only HTTP/HTTPS URLs supported", ""
+            if not parsed.netloc:
+                return False, "Invalid URL format", ""
+
+            path = parsed.path
+
+            # Strip /tree/<branch> path component
+            tree_match = re.match(r"^(/[^/]+/[^/]+)/tree/.+$", path)
+            if tree_match:
+                path = tree_match.group(1)
+
+            # Strip .git suffix
+            if path.endswith(".git"):
+                path = path[:-4]
+
+            # Reconstruct without query/fragment
+            from urllib.parse import urlunparse
+
+            url = urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+
+            hostname = parsed.netloc.lower()
+            is_whitelisted = any(
+                hostname == provider or hostname.endswith("." + provider) for provider in self.ALLOWED_GIT_PROVIDERS
+            )
+            if not is_whitelisted:
+                return False, f"Repository host '{hostname}' not authorized", ""
+
+        except Exception as e:
+            return False, f"URL parsing error: {e}", ""
+
+        dangerous_patterns = [";", "||", "&&", "$(", "`", "\n", "\r"]
+        if any(pat in url for pat in dangerous_patterns):
+            return False, "URL contains suspicious characters", ""
+
+        return True, "", url
+
+    def _extract_repo_name(self, url: str) -> str:
+        """Extract and sanitize a directory name from a git repo URL."""
+        path = urlparse(url).path.rstrip("/")
+        name = path.split("/")[-1]
+        if name.endswith(".git"):
+            name = name[:-4]
+        name = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)
+        return name or "repo"
+
+    def _get_home_mount_path(self, home_volume_name: str) -> str:
+        """Return the mountPath of the home volume from self.volume_mounts."""
+        for vm in self.volume_mounts:
+            if vm.get("name") == home_volume_name:
+                return vm["mountPath"]
+        return "/home/jovyan"
+
+    def _build_git_init_container(
+        self,
+        repo_url: str,
+        repo_name: str,
+        home_volume_name: str,
+        home_mount_path: str,
+        repo_branch: str = "",
+    ) -> dict:
+        """
+        Build an init container spec that clones a repository into the home mount path.
+
+        The init container mounts the same home PVC as the main container and clones
+        into <home_mount_path>/<repo_name>. A preStop lifecycle hook on the main container
+        removes the directory when the session ends so it does not persist.
+
+        The script is read from core/scripts/git-clone.sh, base64-encoded and decoded
+        at runtime to prevent KubeSpawner's _expand_all from treating shell braces as
+        Python format string placeholders. Variables are passed as environment variables.
+        """
+        script_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "git-clone.sh")
+        with open(script_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+
+        clone_dir = f"{home_mount_path}/{repo_name}"
+
+        env = [
+            {"name": "REPO_URL", "value": repo_url},
+            {"name": "CLONE_DIR", "value": clone_dir},
+            {"name": "MAX_CLONE_TIMEOUT", "value": str(self.MAX_CLONE_TIMEOUT)},
+        ]
+        if repo_branch:
+            env.append({"name": "BRANCH", "value": repo_branch})
+
+        return {
+            "name": "init-clone-repo",
+            "image": self.GIT_INIT_CONTAINER_IMAGE,
+            "imagePullPolicy": "IfNotPresent",
+            "command": ["sh", "-c", f"echo {encoded} | base64 -d | sh"],
+            "env": env,
+            "volumeMounts": [{"name": home_volume_name, "mountPath": home_mount_path}],
+            "securityContext": {
+                "runAsUser": 1000,
+                "runAsNonRoot": True,
+                "allowPrivilegeEscalation": False,
+            },
+            "resources": {
+                "requests": {"memory": "128Mi", "cpu": "100m"},
+                "limits": {"memory": "256Mi", "cpu": "300m"},
+            },
+        }
 
     def _parse_memory_string(self, memory_str) -> float:
         """Parse memory string with units like '16Gi' or '512Mi' to float in GB."""
@@ -451,6 +618,10 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
     async def start(self):
         """Start the spawner and schedule automatic shutdown."""
+        # Ensure pod fails immediately (not retried) when an init container fails.
+        # JupyterHub manages pod lifecycle; Kubernetes should not silently restart pods.
+        self.extra_pod_config = {"restartPolicy": "Never"}
+
         runtime_minutes = self.user_options.get("runtime_minutes", 20)
         resource_type = self.user_options.get("resource_type", "cpu")
         gpu_selection = self.user_options.get("gpu_selection", None)
@@ -513,7 +684,91 @@ class RemoteLabKubeSpawner(KubeSpawner):
             }
         )
 
-        start_result = await super().start()
+        # Prefer a repo URL provided by the frontend only; do not fallback to config
+        try:
+            repo_url = str(self.user_options.get("repo_url", "") or "").strip()
+            repo_branch = str(self.user_options.get("repo_branch", "") or "").strip()
+        except Exception:
+            repo_url = ""
+            repo_branch = ""
+
+        # Check if the selected resource permits git cloning
+        resource_type = self.user_options.get("resource_type", "")
+        resource_metadata = self._hub_config.get_resource_metadata(resource_type) if self._hub_config else None
+        allow_git_clone = resource_metadata.allowGitClone if resource_metadata else False
+
+        if repo_url and not allow_git_clone:
+            self.log.warning(
+                f"Repository URL ignored for user {self.user.name}: "
+                f"resource '{resource_type}' does not allow git cloning"
+            )
+            repo_url = ""
+
+        # Extract branch from URL path if not provided separately (e.g. /owner/repo/tree/main)
+        if repo_url and not repo_branch:
+            tree_match = re.match(r"^https?://[^/]+/[^/]+/[^/]+/tree/(.+)$", repo_url)
+            if tree_match:
+                repo_branch = tree_match.group(1)
+
+        # Sanitize branch name: allow only safe characters
+        if repo_branch and not re.match(r"^[a-zA-Z0-9_./-]+$", repo_branch):
+            self.log.warning(f"Invalid branch name for user {self.user.name}: {repo_branch!r}")
+            repo_branch = ""
+
+        if repo_url:
+            is_valid, err_msg, sanitized_url = self._validate_and_sanitize_repo_url(repo_url)
+            if not is_valid:
+                self.log.warning(f"Repository URL rejected for user {self.user.name}: {err_msg}")
+            else:
+                try:
+                    repo_name = self._extract_repo_name(sanitized_url)
+
+                    safe_username = self._expand_user_properties("{username}")
+                    home_volume_name = f"volume-{safe_username}"
+                    home_mount_path = self._get_home_mount_path(home_volume_name)
+                    init_container = self._build_git_init_container(
+                        sanitized_url, repo_name, home_volume_name, home_mount_path, repo_branch
+                    )
+                    self.init_containers = [init_container] + list(self.init_containers or [])
+
+                    # preStop lifecycle hook: remove the cloned directory on session end
+                    extra = dict(self.extra_container_config or {})
+                    clone_dir = f"{home_mount_path}/{repo_name}"
+                    extra["lifecycle"] = {"preStop": {"exec": {"command": ["rm", "-rf", clone_dir]}}}
+                    self.extra_container_config = extra
+
+                    self.notebook_dir = home_mount_path
+                    self.default_url = f"/lab/tree/{repo_name}"
+                    self._has_git_init_container = True
+                    branch_info = f" (branch: {repo_branch})" if repo_branch else ""
+                    self.log.info(
+                        f"Configured git init container for {self.user.name}: {sanitized_url} -> ~/{repo_name}{branch_info}"
+                    )
+                except Exception as e:
+                    self.log.warning(f"Failed to configure git init container: {e}")
+
+        if getattr(self, "_has_git_init_container", False):
+            ref_key = f"{self.namespace}/{self.pod_name}"
+            start_task = asyncio.ensure_future(super().start())
+            monitor_task = asyncio.ensure_future(self._monitor_pod_failure(ref_key))
+            try:
+                done, pending = await asyncio.wait(
+                    {start_task, monitor_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await task
+                if monitor_task in done and not monitor_task.cancelled():
+                    monitor_task.result()  # re-raises failure RuntimeError
+                start_result = start_task.result()
+            except Exception:
+                with contextlib.suppress(Exception):
+                    await self.stop(True)
+                raise
+        else:
+            start_result = await super().start()
 
         # Store for internal use
         self.start_time = start_time
@@ -532,6 +787,33 @@ class RemoteLabKubeSpawner(KubeSpawner):
             self.log.debug(f"Scheduled shutdown after {runtime_minutes} minutes at {time.ctime(self.shutdown_time)}")
 
         return start_result
+
+    async def _monitor_pod_failure(self, ref_key: str) -> None:
+        """Raise immediately if the pod enters Failed phase.
+
+        Runs concurrently with super().start() so that a failed init container
+        (e.g. git clone error) is detected without waiting for start_timeout.
+        """
+        seen_running = False
+        while True:
+            await asyncio.sleep(3)
+            reflector = getattr(self, "pod_reflector", None)
+            if reflector is None:
+                continue
+            pod = reflector.pods.get(ref_key)
+            if pod is None:
+                continue
+            phase = pod["status"]["phase"]
+            # Wait until the pod has moved past Pending at least once,
+            # so we don't react to a stale Failed status from a previous pod.
+            if phase in ("Running", "Pending"):
+                seen_running = True
+                continue
+            if phase == "Failed" and seen_running:
+                raise RuntimeError(
+                    "Server failed to start: the Git repository could not be cloned. "
+                    "Verify the URL is correct and the repository is publicly accessible."
+                )
 
     async def stop(self, now=False):
         """Stop the container and record quota usage."""

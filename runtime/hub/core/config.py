@@ -93,6 +93,7 @@ class ResourceMetadata(BaseModel):
     subDescription: str = ""
     accelerator: str = ""
     acceleratorKeys: list[str] = Field(default_factory=list)
+    allowGitClone: bool = False
 
     model_config = {"extra": "allow"}
 
@@ -115,6 +116,16 @@ class TeamsConfig(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class GitCloneSettings(BaseModel):
+    """Git repository cloning configuration."""
+
+    initContainerImage: str = "alpine/git:2.47.2"
+    allowedProviders: list[str] = Field(default_factory=lambda: ["github.com", "gitlab.com", "bitbucket.org"])
+    maxCloneTimeout: int = 300
+
+    model_config = {"extra": "allow"}
+
+
 class ParsedConfig(BaseModel):
     """Parsed configuration from values.yaml custom section."""
 
@@ -122,6 +133,7 @@ class ParsedConfig(BaseModel):
     accelerators: dict[str, AcceleratorConfig] = Field(default_factory=dict)
     teams: TeamsConfig = Field(default_factory=TeamsConfig)
     quota: QuotaSettings = Field(default_factory=QuotaSettings)
+    gitClone: GitCloneSettings = Field(default_factory=GitCloneSettings)
 
     model_config = {"extra": "allow"}
 
@@ -132,6 +144,7 @@ class ParsedConfig(BaseModel):
         accelerators: dict | None = None,
         teams: dict | None = None,
         quota: dict | None = None,
+        git_clone: dict | None = None,
     ) -> ParsedConfig:
         """Create configuration from individual dicts."""
         raw_config: dict[str, Any] = {}
@@ -144,6 +157,8 @@ class ParsedConfig(BaseModel):
             raw_config["teams"] = teams
         if quota:
             raw_config["quota"] = quota
+        if git_clone:
+            raw_config["gitClone"] = git_clone
 
         return cls.model_validate(raw_config)
 
@@ -223,6 +238,7 @@ class HubConfig:
             accelerators=raw_config.get("accelerators"),
             teams=raw_config.get("teams"),
             quota=raw_config.get("quota"),
+            git_clone=raw_config.get("gitClone"),
         )
 
         # Quota enabled: from config or auto-detect based on auth_mode
@@ -287,6 +303,11 @@ class HubConfig:
     def quota(self) -> QuotaSettings:
         """Get quota configuration."""
         return self._config.quota
+
+    @property
+    def git_clone(self) -> GitCloneSettings:
+        """Get git clone configuration."""
+        return self._config.gitClone
 
     # =========================================================================
     # Helper Methods

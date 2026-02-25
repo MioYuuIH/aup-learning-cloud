@@ -17,39 +17,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-export interface ResourceRequirements {
-  cpu: string;
-  memory: string;
-  memory_limit?: string;
-  "amd.com/gpu"?: string;
-  "amd.com/npu"?: string;
+import { apiRequest } from "./client.js";
+
+export interface ValidateRepoResult {
+  valid: boolean;
+  error: string;
 }
 
-export interface ResourceMetadata {
-  group: string;
-  description: string;
-  subDescription?: string;
-  accelerator?: string;
-  acceleratorKeys?: string[];
-  allowGitClone?: boolean;
-}
-
-export interface Resource {
-  key: string;
-  image: string;
-  requirements: ResourceRequirements;
-  metadata?: ResourceMetadata;
-}
-
-export interface ResourceGroup {
-  name: string;
-  displayName: string;
-  resources: Resource[];
-}
-
-export interface ResourcesResponse {
-  resources: Resource[];
-  groups: ResourceGroup[];
-  acceleratorKeys: string[];
-  allowedGitProviders: string[];
+export async function validateRepo(url: string, branch?: string): Promise<ValidateRepoResult> {
+  return apiRequest<ValidateRepoResult>("/validate-repo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, branch }),
+  });
 }

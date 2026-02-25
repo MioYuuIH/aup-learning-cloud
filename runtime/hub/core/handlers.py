@@ -29,8 +29,10 @@ Provides custom handlers for:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
+from urllib.parse import urlencode, urlparse
 
 from jupyterhub.apihandlers import APIHandler
 from jupyterhub.handlers import BaseHandler
@@ -652,6 +654,22 @@ class UserQuotaInfoHandler(APIHandler):
         assert self.current_user is not None
 
         username = self.current_user.name
+
+        if not _handler_config.get("quota_enabled"):
+            self.set_header("Content-Type", "application/json")
+            self.finish(
+                json.dumps(
+                    {
+                        "username": username,
+                        "balance": 0,
+                        "unlimited": True,
+                        "rates": _handler_config["quota_rates"],
+                        "enabled": False,
+                    }
+                )
+            )
+            return
+
         quota_manager = get_quota_manager()
         balance = quota_manager.get_balance(username)
         has_unlimited = quota_manager.is_unlimited_in_db(username)
@@ -664,7 +682,7 @@ class UserQuotaInfoHandler(APIHandler):
                     "balance": balance,
                     "unlimited": has_unlimited,
                     "rates": _handler_config["quota_rates"],
-                    "enabled": _handler_config["quota_enabled"],
+                    "enabled": True,
                 }
             )
         )
@@ -720,9 +738,10 @@ class ResourcesAPIHandler(APIHandler):
                 groups_dict[group_name] = []
             groups_dict[group_name].append(resource_data)
 
-        # Build groups list - sort alphabetically, but put OTHERS last
+        # Build groups list - sort alphabetically, but put CUSTOM REPO last
+        BOTTOM_GROUPS = {"OTHERS", "CUSTOM REPO"}
         groups_list = []
-        sorted_group_names = sorted(groups_dict.keys(), key=lambda x: (x == "OTHERS", x))
+        sorted_group_names = sorted(groups_dict.keys(), key=lambda x: (x in BOTTOM_GROUPS, x))
         for group_name in sorted_group_names:
             groups_list.append(
                 {
@@ -739,9 +758,86 @@ class ResourcesAPIHandler(APIHandler):
                     "resources": resources_list,
                     "groups": groups_list,
                     "acceleratorKeys": list(config.accelerators.keys()),
+                    "allowedGitProviders": list(config.git_clone.allowedProviders),
                 }
             )
         )
+
+
+class GitSpawnHandler(BaseHandler):
+    """Handle /hub/git/<provider/owner/repo> URLs for direct repo spawning.
+
+    Validates the repository URL and redirects to the spawn page with the
+    repo URL pre-filled. Supports optional query parameters:
+      - autostart=1  : auto-select default resource and submit form immediately
+      - resource=<k> : pre-select a specific resource key
+    """
+
+    @web.authenticated
+    async def get(self, repo_path: str):
+        from core.config import HubConfig
+
+        config = HubConfig.get()
+        allowed_providers = list(config.git_clone.allowedProviders)
+
+        repo_url = f"https://{repo_path.rstrip('/')}"
+
+        try:
+            parsed = urlparse(repo_url)
+            hostname = parsed.netloc.lower()
+        except Exception as e:
+            raise web.HTTPError(400, "Invalid repository URL") from e
+
+        is_allowed = any(hostname == p or hostname.endswith("." + p) for p in allowed_providers)
+        if not is_allowed:
+            raise web.HTTPError(403, f"Repository host '{hostname}' is not allowed")
+
+        params: list[tuple[str, str]] = [("repo_url", repo_url)]
+        if self.get_argument("autostart", ""):
+            params.append(("autostart", "1"))
+        if resource := self.get_argument("resource", ""):
+            if resource not in config.resources.images:
+                raise web.HTTPError(400, f"Unknown resource: '{resource}'")
+            params.append(("resource", resource))
+        if accelerator := self.get_argument("accelerator", ""):
+            if accelerator not in config.accelerators:
+                raise web.HTTPError(400, f"Unknown accelerator: '{accelerator}'")
+            params.append(("accelerator", accelerator))
+
+        spawn_url = self.hub.base_url + "spawn?" + urlencode(params)
+        self.redirect(spawn_url)
+
+
+class ValidateRepoHandler(APIHandler):
+    """Validate a git repository URL (and optional branch) via dulwich ls_remote."""
+
+    @web.authenticated
+    async def post(self):
+        body = json.loads(self.request.body)
+        url = (body.get("url") or "").strip()
+        branch = (body.get("branch") or "").strip()
+        result = {"valid": False, "error": "URL is required"}
+        if url:
+            try:
+                from dulwich.porcelain import ls_remote
+
+                refs = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, ls_remote, url),
+                    timeout=10,
+                )
+                if branch:
+                    ref_key = f"refs/heads/{branch}".encode()
+                    tag_key = f"refs/tags/{branch}".encode()
+                    if ref_key not in refs and tag_key not in refs:
+                        result = {"valid": False, "error": f"Branch '{branch}' not found"}
+                    else:
+                        result = {"valid": True, "error": ""}
+                else:
+                    result = {"valid": True, "error": ""}
+            except Exception:
+                result = {"valid": False, "error": "Repository not found or not accessible"}
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps(result))
 
 
 # =============================================================================
@@ -770,6 +866,10 @@ def get_handlers() -> list[tuple[str, type]]:
         (r"/api/accelerators", AcceleratorsAPIHandler),
         # Resources API
         (r"/api/resources", ResourcesAPIHandler),
+        # Git repo validation API
+        (r"/api/validate-repo", ValidateRepoHandler),
+        # Git spawn shortcut: /hub/git/github.com/owner/repo[?autostart=1&resource=cpu]
+        (r"/git/(.*)", GitSpawnHandler),
         # Quota management API
         (r"/admin/api/quota/?", QuotaAPIHandler),
         (r"/admin/api/quota/batch", QuotaBatchAPIHandler),

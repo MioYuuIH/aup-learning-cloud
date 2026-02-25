@@ -55,6 +55,22 @@ custom:
     enabled: false
 
   # ============================================================================
+  # Git Repository Cloning
+  # ============================================================================
+  # Users can provide an optional Git URL on the spawn form; the repo will be
+  # cloned into ~/home at container start via an init container.
+  gitClone:
+    # Container image used for git operations (must include git and sh)
+    initContainerImage: "alpine/git:2.47.2"
+    # Allowed Git hosting providers (subdomains are also accepted)
+    allowedProviders:
+      - github.com
+      - gitlab.com
+      - bitbucket.org
+    # Maximum time (seconds) allowed for a clone or fetch operation
+    maxCloneTimeout: 300
+
+  # ============================================================================
   # Accelerator Configuration
   # ============================================================================
   # Define available GPU/NPU node types for course selection interface
@@ -104,10 +120,12 @@ custom:
     # Add new course images here
     images:
       cpu: "ghcr.io/amdresearch/auplc-default:latest"
+      gpu: "ghcr.io/amdresearch/base-gfx1151:v0.1-full"
       Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
       Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
       Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
       Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
+      # Custom-URL: "ghcr.io/amdresearch/auplc-cv:latest"
 
     # Course Resource Requirements
     # Define resource quotas for each course
@@ -116,6 +134,11 @@ custom:
         cpu: "2"
         memory: "4Gi"
         memory_limit: "6Gi"
+      gpu:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
       Course-CV:
         cpu: "4"
         memory: "16Gi"
@@ -136,6 +159,11 @@ custom:
         memory: "16Gi"
         memory_limit: "24Gi"
         amd.com/gpu: "1"
+      # Custom-URL:
+      #   cpu: "4"
+      #   memory: "16Gi"
+      #   memory_limit: "24Gi"
+      #   amd.com/gpu: "1"
       none:
         cpu: "2"
         memory: "4Gi"
@@ -145,11 +173,20 @@ custom:
     # Defines display information for each course
     metadata:
       cpu:
-        group: "OTHERS"
+        group: "CUSTOM REPO"
         description: "Basic Python Environment"
         subDescription: "CPU Only Environment"
         accelerator: ""
         acceleratorKeys: []
+        allowGitClone: true
+      gpu:
+        group: "CUSTOM REPO"
+        description: "Basic GPU Environment"
+        subDescription: "GPU Accelerated Environment"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+        allowGitClone: true
       Course-CV:
         group: "COURSE"
         description: "Computer Vision Course"
@@ -194,6 +231,7 @@ custom:
         - Course-PhySim
       official:
         - cpu
+        - gpu
         - Course-CV
         - Course-DL
         - Course-LLM
