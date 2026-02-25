@@ -24,6 +24,48 @@ import { useResources } from './hooks/useResources';
 import { useAccelerators } from './hooks/useAccelerators';
 import { useQuota } from './hooks/useQuota';
 
+/**
+ * Normalize a repo URL typed by the user:
+ * - Trims whitespace
+ * - Prepends https:// if no protocol is present
+ * - Strips /tree/<branch> (GitHub/GitLab style) and returns branch separately
+ * - Strips trailing .git suffix
+ * Returns { url, branch } where url is the clean clone URL.
+ */
+function normalizeRepoUrl(raw: string): { url: string; branch: string } {
+  let s = raw.trim();
+  if (!s) return { url: '', branch: '' };
+
+  if (!s.includes('://')) {
+    s = 'https://' + s;
+  }
+
+  let branch = '';
+  try {
+    const parsed = new URL(s);
+    let path = parsed.pathname;
+
+    // Strip /tree/<branch> (GitHub: /owner/repo/tree/main)
+    const treeMatch = path.match(/^(\/[^/]+\/[^/]+)\/tree\/(.+)$/);
+    if (treeMatch) {
+      path = treeMatch[1];
+      branch = treeMatch[2];
+    }
+
+    if (path.endsWith('.git')) {
+      path = path.slice(0, -4);
+    }
+
+    parsed.pathname = path;
+    // Remove any query string or hash that may have been pasted
+    parsed.search = '';
+    parsed.hash = '';
+    return { url: parsed.toString(), branch };
+  } catch {
+    return { url: s, branch: '' };
+  }
+}
+
 function validateRepoUrl(url: string, allowedProviders: string[]): string {
   if (!url) return '';
   try {
@@ -59,15 +101,20 @@ function App() {
   const [runtime, setRuntime] = useState(20);
   const [runtimeInput, setRuntimeInput] = useState('20');
   const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
+  const [repoBranch, setRepoBranch] = useState('');
   const [repoUrlError, setRepoUrlError] = useState('');
   const [paramWarning, setParamWarning] = useState('');
 
   const loading = resourcesLoading || acceleratorsLoading || quotaLoading;
 
-  // Validate initial repo_url from query params once providers are loaded
+  // Normalize and validate initial repo_url from query params once providers are loaded
   useEffect(() => {
-    if (allowedGitProviders.length === 0 || !initialRepoUrl) return;
-    const err = validateRepoUrl(initialRepoUrl, allowedGitProviders);
+    if (!initialRepoUrl) return;
+    const { url, branch } = normalizeRepoUrl(initialRepoUrl);
+    if (url !== initialRepoUrl) setRepoUrl(url);
+    if (branch) setRepoBranch(branch);
+    if (allowedGitProviders.length === 0) return;
+    const err = validateRepoUrl(url, allowedGitProviders);
     if (err) setRepoUrlError(err);
   }, [allowedGitProviders, initialRepoUrl]);
 
@@ -208,6 +255,7 @@ function App() {
     <>
       {/* Hidden inputs for form submission */}
       <input type="hidden" name="resource_type" value={selectedResource?.key ?? ''} />
+      {repoBranch && <input type="hidden" name="repo_branch" value={repoBranch} />}
       {selectedResource && (
         <input
           type="hidden"
@@ -279,11 +327,21 @@ function App() {
                   setRepoUrl(e.target.value);
                   setRepoUrlError(validateRepoUrl(e.target.value, allowedGitProviders));
                 }}
+                onBlur={e => {
+                  if (!e.target.value.trim()) return;
+                  const { url, branch } = normalizeRepoUrl(e.target.value);
+                  setRepoUrl(url);
+                  setRepoBranch(branch);
+                  setRepoUrlError(validateRepoUrl(url, allowedGitProviders));
+                }}
                 placeholder="https://github.com/owner/repo"
                 autoComplete="off"
                 spellCheck={false}
                 className={repoUrlError ? 'input-error' : ''}
               />
+              {repoBranch && !repoUrlError && (
+                <small className="repo-branch-hint">Branch: <code>{repoBranch}</code></small>
+              )}
               {repoUrlError && (
                 <small className="repo-url-error">{repoUrlError}</small>
               )}
