@@ -79,31 +79,8 @@ def setup_hub(c: Any) -> None:
     # Configure Spawner
     # =========================================================================
 
-    # Configure spawner class with settings from config
-    RemoteLabKubeSpawner.auth_mode = config.auth_mode
-    RemoteLabKubeSpawner.single_node_mode = config.single_node_mode
-    RemoteLabKubeSpawner.github_org_name = config.github_org_name
-    RemoteLabKubeSpawner.quota_enabled = config.quota_enabled
-
-    # Set resource configuration
-    RemoteLabKubeSpawner.resource_images = config.build_resource_images()
-    RemoteLabKubeSpawner.resource_requirements = config.build_resource_requirements()
-    RemoteLabKubeSpawner.node_selector_mapping = config.build_node_selector_mapping()
-    RemoteLabKubeSpawner.environment_mapping = config.build_environment_mapping()
-    RemoteLabKubeSpawner.team_resource_mapping = config.build_team_resource_mapping()
-
-    # Set quota configuration
-    RemoteLabKubeSpawner.quota_rates = config.build_quota_rates()
-    RemoteLabKubeSpawner.default_quota = config.quota.defaultQuota
-    RemoteLabKubeSpawner.minimum_quota_to_start = config.quota.minimumToStart
-
-    # Set hub config reference (used for per-resource metadata like allowGitClone)
-    RemoteLabKubeSpawner._hub_config = config
-
-    # Set git clone configuration
-    RemoteLabKubeSpawner.GIT_INIT_CONTAINER_IMAGE = config.git_clone.initContainerImage
-    RemoteLabKubeSpawner.ALLOWED_GIT_PROVIDERS = set(config.git_clone.allowedProviders)
-    RemoteLabKubeSpawner.MAX_CLONE_TIMEOUT = config.git_clone.maxCloneTimeout
+    # Configure spawner class with all settings from config (single entry point)
+    RemoteLabKubeSpawner.configure_from_config(config)
 
     c.JupyterHub.spawner_class = RemoteLabKubeSpawner
 

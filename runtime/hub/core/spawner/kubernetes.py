@@ -93,10 +93,10 @@ class RemoteLabKubeSpawner(KubeSpawner):
     default_quota: int = 0
     minimum_quota_to_start: int = 10
 
-    # Repository cloning configuration
-    ALLOWED_GIT_PROVIDERS: set[str] = {"github.com", "gitlab.com", "bitbucket.org"}
-    MAX_CLONE_TIMEOUT: int = 300  # seconds
-    GIT_INIT_CONTAINER_IMAGE: str = "alpine/git:2.47.2"
+    # Repository cloning configuration (populated from HubConfig.git_clone)
+    ALLOWED_GIT_PROVIDERS: set[str] = set()
+    MAX_CLONE_TIMEOUT: int = 0
+    GIT_INIT_CONTAINER_IMAGE: str = ""
 
     @classmethod
     def configure_from_config(cls, config: HubConfig) -> None:
@@ -106,6 +106,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
         This should be called during initialization to inject configuration.
         """
         cls._hub_config = config
+
+        # Basic spawner settings
+        cls.auth_mode = config.auth_mode
+        cls.single_node_mode = config.single_node_mode
+        cls.github_org_name = config.github_org_name
 
         # Extract resource images and requirements
         cls.resource_images = dict(config.resources.images)
@@ -127,14 +132,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
         cls.minimum_quota_to_start = config.quota.minimumToStart
         cls.quota_enabled = config.quota.enabled
 
-        # Extract git clone settings
+        # Extract git clone settings (single source of truth: GitCloneSettings)
         git_config = config.git_clone
-        if git_config.initContainerImage:
-            cls.GIT_INIT_CONTAINER_IMAGE = git_config.initContainerImage
-        if git_config.allowedProviders:
-            cls.ALLOWED_GIT_PROVIDERS = set(git_config.allowedProviders)
-        if git_config.maxCloneTimeout is not None:
-            cls.MAX_CLONE_TIMEOUT = git_config.maxCloneTimeout
+        cls.GIT_INIT_CONTAINER_IMAGE = git_config.initContainerImage
+        cls.ALLOWED_GIT_PROVIDERS = set(git_config.allowedProviders)
+        cls.MAX_CLONE_TIMEOUT = git_config.maxCloneTimeout
 
     async def get_user_teams(self) -> list[str]:
         """
