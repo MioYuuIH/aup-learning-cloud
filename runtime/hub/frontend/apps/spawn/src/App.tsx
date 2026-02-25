@@ -231,6 +231,12 @@ function App() {
     setSelectedResource(null);
   }, []);
 
+  const handleRepoUrlChange = useCallback((value: string) => {
+    setRepoUrl(value);
+    const { url } = normalizeRepoUrl(value);
+    setRepoUrlError(validateRepoUrl(url, allowedGitProviders));
+  }, [allowedGitProviders]);
+
   const handleSelectAccelerator = useCallback((accelerator: Accelerator) => {
     setSelectedAcceleratorKey(accelerator.key);
   }, []);
@@ -323,49 +329,14 @@ function App() {
                 accelerators={accelerators}
                 selectedAccelerator={selectedAccelerator}
                 onSelectAccelerator={handleSelectAccelerator}
+                repoUrl={repoUrl}
+                repoUrlError={repoUrlError}
+                repoBranch={repoBranch}
+                onRepoUrlChange={handleRepoUrlChange}
+                allowedGitProviders={allowedGitProviders}
               />
             ))}
           </div>
-
-          {/* Git repository URL - only for resources that allow it */}
-          {allowGitClone && (
-            <div className="repo-url-section">
-              <label htmlFor="repoUrlInput">
-                Git Repository URL <span className="optional-label">(optional)</span>
-                <span
-                  className="repo-url-hint"
-                  aria-label="Git repository hint"
-                >
-                  ?
-                  <span className="repo-url-tooltip">
-                    The repository will be cloned at startup and available during this session only.
-                    {allowedGitProviders.length > 0 && ` Supports: ${allowedGitProviders.join(', ')}.`}
-                  </span>
-                </span>
-              </label>
-              <input
-                type="text"
-                id="repoUrlInput"
-                name="repo_url"
-                value={repoUrl}
-                onChange={e => {
-                  setRepoUrl(e.target.value);
-                  const { url } = normalizeRepoUrl(e.target.value);
-                  setRepoUrlError(validateRepoUrl(url, allowedGitProviders));
-                }}
-                placeholder="https://github.com/owner/repo"
-                autoComplete="off"
-                spellCheck={false}
-                className={repoUrlError ? 'input-error' : ''}
-              />
-              {repoBranch && !repoUrlError && (
-                <small className="repo-branch-hint">Branch: <code>{repoBranch}</code></small>
-              )}
-              {repoUrlError && (
-                <small className="repo-url-error">{repoUrlError}</small>
-              )}
-            </div>
-          )}
 
           {/* Runtime input */}
           <div className="runtime-container">

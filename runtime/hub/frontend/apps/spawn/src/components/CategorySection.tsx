@@ -30,6 +30,11 @@ interface Props {
   accelerators: Accelerator[];
   selectedAccelerator: Accelerator | null;
   onSelectAccelerator: (accelerator: Accelerator) => void;
+  repoUrl: string;
+  repoUrlError: string;
+  repoBranch: string;
+  onRepoUrlChange: (value: string) => void;
+  allowedGitProviders: string[];
 }
 
 export const CategorySection = memo(function CategorySection({
@@ -41,6 +46,11 @@ export const CategorySection = memo(function CategorySection({
   accelerators,
   selectedAccelerator,
   onSelectAccelerator,
+  repoUrl,
+  repoUrlError,
+  repoBranch,
+  onRepoUrlChange,
+  allowedGitProviders,
 }: Props) {
   const [collapsed, setCollapsed] = useState(!defaultExpanded);
 
@@ -89,6 +99,11 @@ export const CategorySection = memo(function CategorySection({
             accelerators={accelerators}
             selectedAccelerator={selectedAccelerator}
             onSelectAccelerator={onSelectAccelerator}
+            repoUrl={repoUrl}
+            repoUrlError={repoUrlError}
+            repoBranch={repoBranch}
+            onRepoUrlChange={onRepoUrlChange}
+            allowedGitProviders={allowedGitProviders}
           />
         ))}
       </div>

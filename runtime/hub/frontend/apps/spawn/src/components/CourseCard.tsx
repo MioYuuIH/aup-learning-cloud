@@ -27,6 +27,11 @@ interface Props {
   accelerators: Accelerator[];
   selectedAccelerator: Accelerator | null;
   onSelectAccelerator: (accelerator: Accelerator) => void;
+  repoUrl: string;
+  repoUrlError: string;
+  repoBranch: string;
+  onRepoUrlChange: (value: string) => void;
+  allowedGitProviders: string[];
 }
 
 function formatResourceTag(resource: Resource): string {
@@ -49,6 +54,11 @@ export const CourseCard = memo(function CourseCard({
   accelerators,
   selectedAccelerator,
   onSelectAccelerator,
+  repoUrl,
+  repoUrlError,
+  repoBranch,
+  onRepoUrlChange,
+  allowedGitProviders,
 }: Props) {
   const handleClick = useCallback(() => {
     onSelect(resource);
@@ -120,6 +130,39 @@ export const CourseCard = memo(function CourseCard({
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Git Repository URL - only show when selected and resource allows git clone */}
+      {selected && resource.metadata?.allowGitClone && (
+        <div className="repo-url-section" onClick={e => e.stopPropagation()}>
+          <label htmlFor={`repoUrlInput-${resource.key}`}>
+            Git Repository URL <span className="optional-label">(optional)</span>
+            <span className="repo-url-hint" aria-label="Git repository hint">
+              ?
+              <span className="repo-url-tooltip">
+                The repository will be cloned at startup and available during this session only.
+                {allowedGitProviders.length > 0 && ` Supports: ${allowedGitProviders.join(', ')}.`}
+              </span>
+            </span>
+          </label>
+          <input
+            type="text"
+            id={`repoUrlInput-${resource.key}`}
+            name="repo_url"
+            value={repoUrl}
+            onChange={e => onRepoUrlChange(e.target.value)}
+            placeholder="https://github.com/owner/repo"
+            autoComplete="off"
+            spellCheck={false}
+            className={repoUrlError ? 'input-error' : ''}
+          />
+          {repoBranch && !repoUrlError && (
+            <small className="repo-branch-hint">Branch: <code>{repoBranch}</code></small>
+          )}
+          {repoUrlError && (
+            <small className="repo-url-error">{repoUrlError}</small>
+          )}
         </div>
       )}
     </div>

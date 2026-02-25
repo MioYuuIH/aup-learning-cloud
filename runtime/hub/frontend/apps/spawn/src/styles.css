@@ -71,7 +71,7 @@ SOFTWARE.
 [data-bs-theme="dark"] .quota-cost-preview { color: var(--dark-text-secondary) !important; }
 
 /* Repo URL section */
-[data-bs-theme="dark"] .repo-url-section { border-top-color: var(--dark-border) !important; }
+[data-bs-theme="dark"] .repo-url-section { background: var(--dark-bg-secondary) !important; border-color: var(--dark-border) !important; }
 [data-bs-theme="dark"] .repo-url-section label { color: var(--dark-text-primary) !important; }
 [data-bs-theme="dark"] .repo-url-section input[type="text"] { background: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; border-color: var(--dark-border) !important; }
 [data-bs-theme="dark"] .repo-url-section input[type="text"]:focus { border-color: var(--dark-text-secondary) !important; box-shadow: 0 0 0 3px rgba(173,181,189,0.15) !important; }
@@ -366,9 +366,13 @@ SOFTWARE.
 .feedback-container { display: none !important; }
 
 .repo-url-section {
-    margin-top: 25px;
-    padding-top: 20px;
-    border-top: 1px solid #e0e0e0;
+    margin-top: 15px;
+    margin-left: 40px;
+    padding: 18px;
+    background: #ffffff;
+    border: 1px solid #e5e9f0;
+    border-radius: 12px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.06);
 }
 
 .repo-url-section label {
