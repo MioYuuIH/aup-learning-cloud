@@ -393,15 +393,29 @@ class RemoteLabKubeSpawner(KubeSpawner):
             if not parsed.netloc:
                 return False, "Invalid URL format", ""
 
-            # Strip /tree/<branch> path component
             path = parsed.path
-            tree_match = re.match(r"^(/[^/]+/[^/]+)/tree/.+$", path)
-            if tree_match:
-                path = tree_match.group(1)
+
+            # Strip /tree/<branch> or /blob/<branch>/... path components
+            branch_match = re.match(r"^(/[^/]+/[^/]+)/(?:tree|blob)/[^/]+(?:/.*)?$", path)
+            if branch_match:
+                path = branch_match.group(1)
+
+            # Strip non-repo sub-paths (pull, issues, actions, etc.)
+            subpath_match = re.match(
+                r"^(/[^/]+/[^/]+)/(?:pull|pulls|issues|actions|commits|releases|wiki|compare|settings)\b",
+                path,
+            )
+            if subpath_match:
+                path = subpath_match.group(1)
 
             # Strip .git suffix
             if path.endswith(".git"):
                 path = path[:-4]
+
+            # Must have at least /owner/repo
+            segments = [s for s in path.strip("/").split("/") if s]
+            if len(segments) < 2:
+                return False, "URL must include owner and repository name", ""
 
             # Reconstruct without query/fragment
             from urllib.parse import urlunparse
