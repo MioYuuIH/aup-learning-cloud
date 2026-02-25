@@ -93,6 +93,14 @@ export const CourseCard = memo(function CourseCard({
             <span className="resource-tag">
               {resourceTag}
             </span>
+            {resource.metadata?.allowGitClone && (
+              <span className="git-clone-badge" title="Supports custom Git repository cloning">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M15.698 7.287 8.712.302a1.03 1.03 0 0 0-1.457 0l-1.45 1.45 1.84 1.84a1.223 1.223 0 0 1 1.55 1.56l1.773 1.774a1.224 1.224 0 0 1 1.267 2.025 1.226 1.226 0 0 1-2.002-1.334L8.445 5.644v4.237a1.226 1.226 0 1 1-1.008-.036V5.585a1.226 1.226 0 0 1-.666-1.608L4.94 2.135 .302 6.772a1.03 1.03 0 0 0 0 1.456l6.986 6.986a1.03 1.03 0 0 0 1.456 0l6.953-6.953a1.031 1.031 0 0 0 0-1.974"/>
+                </svg>
+                Git Repo
+              </span>
+            )}
           </div>
         </div>
       </div>

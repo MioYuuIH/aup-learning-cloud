@@ -259,6 +259,16 @@ function App() {
             <div className="repo-url-section">
               <label htmlFor="repoUrlInput">
                 Git Repository URL <span className="optional-label">(optional)</span>
+                <span
+                  className="repo-url-hint"
+                  aria-label="Git repository hint"
+                >
+                  ?
+                  <span className="repo-url-tooltip">
+                    The repository will be cloned into your home directory at startup.
+                    {allowedGitProviders.length > 0 && ` Supports: ${allowedGitProviders.join(', ')}.`}
+                  </span>
+                </span>
               </label>
               <input
                 type="text"
@@ -274,10 +284,9 @@ function App() {
                 spellCheck={false}
                 className={repoUrlError ? 'input-error' : ''}
               />
-              {repoUrlError
-                ? <small className="repo-url-error">{repoUrlError}</small>
-                : <small>The repository will be cloned into your home directory at startup.{allowedGitProviders.length > 0 && ` Supports: ${allowedGitProviders.join(', ')}.`}</small>
-              }
+              {repoUrlError && (
+                <small className="repo-url-error">{repoUrlError}</small>
+              )}
             </div>
           )}
 
