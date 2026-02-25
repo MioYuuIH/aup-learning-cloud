@@ -240,6 +240,8 @@ SOFTWARE.
 .gpu-options-container {
     max-height: 180px;
     overflow-y: auto;
+    padding: 0 2px;
+    box-sizing: border-box;
 }
 
 .gpu-option {
