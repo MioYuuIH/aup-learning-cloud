@@ -97,6 +97,14 @@ def setup_hub(c: Any) -> None:
     RemoteLabKubeSpawner.default_quota = config.quota.defaultQuota
     RemoteLabKubeSpawner.minimum_quota_to_start = config.quota.minimumToStart
 
+    # Set hub config reference (used for per-resource metadata like allowGitClone)
+    RemoteLabKubeSpawner._hub_config = config
+
+    # Set git clone configuration
+    RemoteLabKubeSpawner.GIT_INIT_CONTAINER_IMAGE = config.git_clone.initContainerImage
+    RemoteLabKubeSpawner.ALLOWED_GIT_PROVIDERS = set(config.git_clone.allowedProviders)
+    RemoteLabKubeSpawner.MAX_CLONE_TIMEOUT = config.git_clone.maxCloneTimeout
+
     c.JupyterHub.spawner_class = RemoteLabKubeSpawner
 
     # =========================================================================

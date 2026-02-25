@@ -404,44 +404,28 @@ class RemoteLabKubeSpawner(KubeSpawner):
         Build an init container spec that clones or updates the given repository
         into /home/jovyan/<repo_name> on the user's home PVC.
 
-        - First spawn: git clone --depth 1
+        - First spawn: git clone --depth 1; exits 1 on failure so spawn is aborted
         - Subsequent spawns: git fetch + reset --hard (always gets latest, no conflict)
-        - On any failure: logs the error and exits 0 so the spawn is not blocked
+        - Fetch failure: logs the error and continues with existing version
 
-        The script is base64-encoded and decoded at runtime to prevent KubeSpawner's
-        _expand_all from treating shell braces as Python format string placeholders.
+        The script is read from core/scripts/git-clone.sh, base64-encoded and decoded
+        at runtime to prevent KubeSpawner's _expand_all from treating shell braces as
+        Python format string placeholders. Variables are passed as environment variables.
         """
-        clone_script = (
-            "#!/bin/sh\n"
-            "export HOME=/tmp\n"
-            f'REPO_URL="{repo_url}"\n'
-            f'CLONE_DIR="/home/jovyan/{repo_name}"\n'
-            "git config --global http.sslVerify true\n"
-            "git config --global user.email jupyterhub@local\n"
-            "git config --global user.name JupyterHub\n"
-            "if [ ! -d \"$CLONE_DIR/.git\" ]; then\n"
-            "  echo \"Cloning $REPO_URL into $CLONE_DIR\"\n"
-            f"  timeout {self.MAX_CLONE_TIMEOUT} git clone --depth 1 \"$REPO_URL\" \"$CLONE_DIR\"\n"
-            "  if [ $? -ne 0 ]; then echo 'Clone failed - check URL and network access'; fi\n"
-            "else\n"
-            "  echo \"Repository exists, fetching latest...\"\n"
-            f"  timeout {self.MAX_CLONE_TIMEOUT} git -C \"$CLONE_DIR\" fetch origin\n"
-            "  if [ $? -eq 0 ]; then\n"
-            "    git -C \"$CLONE_DIR\" reset --hard origin/HEAD\n"
-            "  else\n"
-            "    echo 'Fetch failed, keeping existing version'\n"
-            "  fi\n"
-            "fi\n"
-            "echo 'Done'\n"
-            "exit 0\n"
-        )
-        encoded = base64.b64encode(clone_script.encode()).decode()
+        script_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "git-clone.sh")
+        with open(script_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
 
         return {
             "name": "init-clone-repo",
             "image": self.GIT_INIT_CONTAINER_IMAGE,
             "imagePullPolicy": "IfNotPresent",
             "command": ["sh", "-c", f"echo {encoded} | base64 -d | sh"],
+            "env": [
+                {"name": "REPO_URL", "value": repo_url},
+                {"name": "CLONE_DIR", "value": f"/home/jovyan/{repo_name}"},
+                {"name": "MAX_CLONE_TIMEOUT", "value": str(self.MAX_CLONE_TIMEOUT)},
+            ],
             "volumeMounts": [{"name": home_volume_name, "mountPath": "/home/jovyan"}],
             "securityContext": {
                 "runAsUser": 1000,
@@ -580,6 +564,10 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
     async def start(self):
         """Start the spawner and schedule automatic shutdown."""
+        # Ensure pod fails immediately (not retried) when an init container fails.
+        # JupyterHub manages pod lifecycle; Kubernetes should not silently restart pods.
+        self.extra_pod_config = {"restartPolicy": "Never"}
+
         runtime_minutes = self.user_options.get("runtime_minutes", 20)
         resource_type = self.user_options.get("resource_type", "cpu")
         gpu_selection = self.user_options.get("gpu_selection", None)
@@ -681,11 +669,33 @@ class RemoteLabKubeSpawner(KubeSpawner):
                     init_container = self._build_git_init_container(sanitized_url, repo_name, home_volume_name)
                     self.init_containers = [init_container] + list(self.init_containers or [])
                     self.default_url = f"/lab/tree/{repo_name}"
+                    self._has_git_init_container = True
                     self.log.info(f"Configured git init container for {self.user.name}: {sanitized_url} -> ~/{repo_name}")
                 except Exception as e:
                     self.log.warning(f"Failed to configure git init container: {e}")
 
-        start_result = await super().start()
+        if getattr(self, "_has_git_init_container", False):
+            ref_key = f"{self.namespace}/{self.pod_name}"
+            start_task = asyncio.ensure_future(super().start())
+            monitor_task = asyncio.ensure_future(self._monitor_pod_failure(ref_key))
+            try:
+                done, pending = await asyncio.wait(
+                    {start_task, monitor_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await task
+                if monitor_task in done and not monitor_task.cancelled():
+                    monitor_task.result()  # re-raises failure RuntimeError
+                start_result = start_task.result()
+            except Exception:
+                with contextlib.suppress(Exception):
+                    await self.stop(True)
+                raise
+        else:
+            start_result = await super().start()
 
         # Store for internal use
         self.start_time = start_time
@@ -704,6 +714,24 @@ class RemoteLabKubeSpawner(KubeSpawner):
             self.log.debug(f"Scheduled shutdown after {runtime_minutes} minutes at {time.ctime(self.shutdown_time)}")
 
         return start_result
+
+    async def _monitor_pod_failure(self, ref_key: str) -> None:
+        """Raise immediately if the pod enters Failed phase.
+
+        Runs concurrently with super().start() so that a failed init container
+        (e.g. git clone error) is detected without waiting for start_timeout.
+        """
+        while True:
+            await asyncio.sleep(3)
+            reflector = getattr(self, "pod_reflector", None)
+            if reflector is None:
+                continue
+            pod = reflector.pods.get(ref_key)
+            if pod is not None and pod["status"]["phase"] == "Failed":
+                raise RuntimeError(
+                    "Server failed to start: the Git repository could not be cloned. "
+                    "Verify the URL is correct and the repository is publicly accessible."
+                )
 
     async def stop(self, now=False):
         """Stop the container and record quota usage."""
