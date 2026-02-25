@@ -43,6 +43,13 @@ git config --global http.sslVerify true
 git config --global user.email jupyterhub@local
 git config --global user.name JupyterHub
 
+# Remove leftover clone directory from a previous session (e.g. preStop hook
+# was skipped due to force-delete or node failure).
+if [ -d "$CLONE_DIR" ]; then
+  echo "Removing leftover directory $CLONE_DIR"
+  rm -rf "$CLONE_DIR"
+fi
+
 if [ -n "${BRANCH:-}" ]; then
   echo "Cloning $REPO_URL (branch: $BRANCH) into $CLONE_DIR"
   if ! timeout "$MAX_CLONE_TIMEOUT" git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$CLONE_DIR"; then
