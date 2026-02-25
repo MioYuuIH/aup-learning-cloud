@@ -653,6 +653,22 @@ class UserQuotaInfoHandler(APIHandler):
         assert self.current_user is not None
 
         username = self.current_user.name
+
+        if not _handler_config.get("quota_enabled"):
+            self.set_header("Content-Type", "application/json")
+            self.finish(
+                json.dumps(
+                    {
+                        "username": username,
+                        "balance": 0,
+                        "unlimited": True,
+                        "rates": _handler_config["quota_rates"],
+                        "enabled": False,
+                    }
+                )
+            )
+            return
+
         quota_manager = get_quota_manager()
         balance = quota_manager.get_balance(username)
         has_unlimited = quota_manager.is_unlimited_in_db(username)
@@ -665,7 +681,7 @@ class UserQuotaInfoHandler(APIHandler):
                     "balance": balance,
                     "unlimited": has_unlimited,
                     "rates": _handler_config["quota_rates"],
-                    "enabled": _handler_config["quota_enabled"],
+                    "enabled": True,
                 }
             )
         )
