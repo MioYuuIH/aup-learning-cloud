@@ -105,6 +105,7 @@ function App() {
   const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
   const [repoUrlError, setRepoUrlError] = useState('');
   const [repoValidating, setRepoValidating] = useState(false);
+  const [repoValid, setRepoValid] = useState(false);
   const [paramWarning, setParamWarning] = useState('');
   const validateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -253,6 +254,7 @@ function App() {
     const formatError = validateRepoUrl(url, allowedGitProviders);
     setRepoUrlError(formatError);
     setRepoValidating(false);
+    setRepoValid(false);
 
     // Clear pending validation
     if (validateTimerRef.current) clearTimeout(validateTimerRef.current);
@@ -263,7 +265,9 @@ function App() {
       validateTimerRef.current = setTimeout(async () => {
         try {
           const result = await validateRepo(url, branch || undefined);
-          if (!result.valid) {
+          if (result.valid) {
+            setRepoValid(true);
+          } else {
             setRepoUrlError(result.error);
           }
         } catch {
@@ -371,6 +375,7 @@ function App() {
                 repoUrl={repoUrl}
                 repoUrlError={repoUrlError}
                 repoValidating={repoValidating}
+                repoValid={repoValid}
                 repoBranch={repoBranch}
                 onRepoUrlChange={handleRepoUrlChange}
                 allowedGitProviders={allowedGitProviders}

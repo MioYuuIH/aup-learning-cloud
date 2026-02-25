@@ -30,6 +30,7 @@ interface Props {
   repoUrl: string;
   repoUrlError: string;
   repoValidating: boolean;
+  repoValid: boolean;
   repoBranch: string;
   onRepoUrlChange: (value: string) => void;
   allowedGitProviders: string[];
@@ -58,6 +59,7 @@ export const CourseCard = memo(function CourseCard({
   repoUrl,
   repoUrlError,
   repoValidating,
+  repoValid,
   repoBranch,
   onRepoUrlChange,
   allowedGitProviders,
@@ -137,8 +139,8 @@ export const CourseCard = memo(function CourseCard({
 
       {/* Git Repository URL - only show when selected and resource allows git clone */}
       {selected && resource.metadata?.allowGitClone && (
-        <div className="repo-url-section" onClick={e => e.stopPropagation()}>
-          <label htmlFor={`repoUrlInput-${resource.key}`}>
+        <div className="gpu-selection" onClick={e => e.stopPropagation()}>
+          <h6>
             Git Repository URL <span className="optional-label">(optional)</span>
             <span className="repo-url-hint" aria-label="Git repository hint">
               ?
@@ -147,7 +149,7 @@ export const CourseCard = memo(function CourseCard({
                 {allowedGitProviders.length > 0 && ` Supports: ${allowedGitProviders.join(', ')}.`}
               </span>
             </span>
-          </label>
+          </h6>
           <input
             type="text"
             id={`repoUrlInput-${resource.key}`}
@@ -157,13 +159,15 @@ export const CourseCard = memo(function CourseCard({
             placeholder="https://github.com/owner/repo"
             autoComplete="off"
             spellCheck={false}
-            className={repoUrlError ? 'input-error' : ''}
+            className={`repo-url-input ${repoUrlError ? 'input-error' : ''} ${repoValid ? 'input-valid' : ''}`}
           />
           {repoValidating && (
             <small className="repo-url-validating">Checking repository...</small>
           )}
-          {repoBranch && !repoUrlError && !repoValidating && (
-            <small className="repo-branch-hint">Branch: <code>{repoBranch}</code></small>
+          {repoValid && !repoValidating && (
+            <small className="repo-url-success">
+              ✓ Repository verified{repoBranch ? ` · Branch: ${repoBranch}` : ''}
+            </small>
           )}
           {repoUrlError && !repoValidating && (
             <small className="repo-url-error">{repoUrlError}</small>

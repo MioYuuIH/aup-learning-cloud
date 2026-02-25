@@ -34,6 +34,7 @@ interface Props {
   repoUrl: string;
   repoUrlError: string;
   repoValidating: boolean;
+  repoValid: boolean;
   repoBranch: string;
   onRepoUrlChange: (value: string) => void;
   allowedGitProviders: string[];
@@ -52,6 +53,7 @@ export const CategorySection = memo(function CategorySection({
   repoUrl,
   repoUrlError,
   repoValidating,
+  repoValid,
   repoBranch,
   onRepoUrlChange,
   allowedGitProviders,
@@ -90,6 +92,7 @@ export const CategorySection = memo(function CategorySection({
             repoUrl={repoUrl}
             repoUrlError={repoUrlError}
             repoValidating={repoValidating}
+            repoValid={repoValid}
             repoBranch={repoBranch}
             onRepoUrlChange={onRepoUrlChange}
             allowedGitProviders={allowedGitProviders}
