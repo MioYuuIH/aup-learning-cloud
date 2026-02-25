@@ -173,14 +173,14 @@ custom:
     # Defines display information for each course
     metadata:
       cpu:
-        group: "OTHERS"
+        group: "CUSTOM REPO"
         description: "Basic Python Environment"
         subDescription: "CPU Only Environment"
         accelerator: ""
         acceleratorKeys: []
         allowGitClone: true
       gpu:
-        group: "OTHERS"
+        group: "CUSTOM REPO"
         description: "Basic GPU Environment"
         subDescription: "GPU Accelerated Environment"
         accelerator: "GPU"
