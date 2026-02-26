@@ -32,14 +32,15 @@ from oauthenticator.oauth2 import OAuthCallbackHandler
 class _GitHubAppInstallCallbackHandler(OAuthCallbackHandler):
     """Callback handler that gracefully handles GitHub App installation redirects.
 
-    When a user installs a GitHub App, GitHub redirects to the OAuth callback URL
-    with ``setup_action=install`` but without the ``state`` parameter that the
-    standard OAuth flow requires.  Instead of returning a 400 error, detect this
-    case and redirect the user back to the spawn page.
+    When a user installs/requests a GitHub App, GitHub redirects to the OAuth
+    callback URL with ``setup_action`` (install, request, etc.) but without the
+    ``state`` parameter that the standard OAuth flow requires.  Instead of
+    returning a 400 error, detect this case and redirect the user back to the
+    spawn page.
     """
 
     async def get(self):
-        if self.get_argument("setup_action", "") == "install" and not self.get_argument("state", ""):
+        if self.get_argument("setup_action", "") and not self.get_argument("state", ""):
             self.redirect(self.hub.base_url + "spawn")
             return
         await super().get()
