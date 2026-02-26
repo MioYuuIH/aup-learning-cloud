@@ -1001,44 +1001,47 @@ class GitHubReposHandler(APIHandler):
                     data = await resp.json()
                     installations = data.get("installations", [])
 
-                installation_id = None
+                installation_ids = []
                 for inst in installations:
                     slug = inst.get("app_slug", "")
                     if slug == app_name:
-                        installation_id = inst["id"]
+                        installation_ids.append(inst["id"])
                         installed = True
-                        break
 
-                if not installation_id:
+                if not installation_ids:
                     self.set_header("Content-Type", "application/json")
                     self.finish(json.dumps({"repos": [], "installed": False}))
                     return
 
-                # Step 2: List repos for this installation
-                page = 1
-                while True:
-                    async with session.get(
-                        f"https://api.github.com/user/installations/{installation_id}/repositories?per_page=100&page={page}",
-                        headers=headers,
-                    ) as resp:
-                        if resp.status != 200:
-                            break
-                        data = await resp.json()
-                        page_repos = data.get("repositories", [])
-                        if not page_repos:
-                            break
-                        for r in page_repos:
-                            repos.append(
-                                {
-                                    "full_name": r["full_name"],
-                                    "html_url": r["html_url"],
-                                    "private": r["private"],
-                                    "description": r.get("description") or "",
-                                }
-                            )
-                        if len(page_repos) < 100:
-                            break
-                        page += 1
+                # Step 2: List repos for all matching installations
+                seen = set()
+                for installation_id in installation_ids:
+                    page = 1
+                    while True:
+                        async with session.get(
+                            f"https://api.github.com/user/installations/{installation_id}/repositories?per_page=100&page={page}",
+                            headers=headers,
+                        ) as resp:
+                            if resp.status != 200:
+                                break
+                            data = await resp.json()
+                            page_repos = data.get("repositories", [])
+                            if not page_repos:
+                                break
+                            for r in page_repos:
+                                if r["full_name"] not in seen:
+                                    seen.add(r["full_name"])
+                                    repos.append(
+                                        {
+                                            "full_name": r["full_name"],
+                                            "html_url": r["html_url"],
+                                            "private": r["private"],
+                                            "description": r.get("description") or "",
+                                        }
+                                    )
+                            if len(page_repos) < 100:
+                                break
+                            page += 1
 
         except Exception as e:
             self.log.warning(f"Failed to fetch GitHub repos: {e}")
