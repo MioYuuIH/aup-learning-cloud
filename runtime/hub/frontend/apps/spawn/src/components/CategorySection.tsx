@@ -38,8 +38,6 @@ interface Props {
   repoBranch: string;
   onRepoUrlChange: (value: string) => void;
   allowedGitProviders: string[];
-  accessToken: string;
-  onAccessTokenChange: (value: string) => void;
   githubAppName: string;
   githubRepos: GitHubRepo[];
   githubAppInstalled: boolean;
@@ -63,8 +61,6 @@ export const CategorySection = memo(function CategorySection({
   repoBranch,
   onRepoUrlChange,
   allowedGitProviders,
-  accessToken,
-  onAccessTokenChange,
   githubAppName,
   githubRepos,
   githubAppInstalled,
@@ -108,8 +104,6 @@ export const CategorySection = memo(function CategorySection({
             repoBranch={repoBranch}
             onRepoUrlChange={onRepoUrlChange}
             allowedGitProviders={allowedGitProviders}
-            accessToken={accessToken}
-            onAccessTokenChange={onAccessTokenChange}
             githubAppName={githubAppName}
             githubRepos={githubRepos}
             githubAppInstalled={githubAppInstalled}

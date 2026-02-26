@@ -927,20 +927,19 @@ class ValidateRepoHandler(APIHandler):
         body = json.loads(self.request.body)
         url = (body.get("url") or "").strip()
         branch = (body.get("branch") or "").strip()
-        access_token = (body.get("access_token") or "").strip()
 
-        # Token fallback: user PAT > OAuth token (GitHub App) > default token
+        # Token fallback: OAuth token (GitHub App) > default token
         from core.config import HubConfig
 
         config = HubConfig.get()
-        if not access_token:
-            try:
-                user = self.current_user
-                auth_state = await user.get_auth_state()
-                if auth_state and auth_state.get("access_token") and config.git_clone.githubAppName:
-                    access_token = auth_state["access_token"]
-            except Exception:
-                pass
+        access_token = ""
+        try:
+            user = self.current_user
+            auth_state = await user.get_auth_state()
+            if auth_state and auth_state.get("access_token") and config.git_clone.githubAppName:
+                access_token = auth_state["access_token"]
+        except Exception:
+            pass
         if not access_token and config.git_clone.defaultAccessToken:
             access_token = config.git_clone.defaultAccessToken
 

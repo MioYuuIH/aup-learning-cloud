@@ -652,55 +652,24 @@ SOFTWARE.
 
 .repo-picker-footer:hover { text-decoration: underline; }
 
-/* ========== Access Token Section ========== */
+/* ========== GitHub App Install Prompt ========== */
 
-.token-section {
-    margin-top: 14px;
-}
-
-.token-section h6 {
-    color: #2e3440;
-    font-size: 1rem;
-    margin-bottom: 10px;
-    font-weight: 600;
-}
-
-.token-hint {
-    display: block;
-    margin-top: 6px;
-    font-size: 12px;
-}
-
-.token-hint a {
+.github-app-prompt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 13px;
     color: #6c757d;
     text-decoration: none;
 }
 
-.token-hint a:hover { text-decoration: underline; }
-
-/* ========== GitHub App Install Prompt ========== */
-
-.github-app-prompt {
-    margin-top: 12px;
-    padding: 10px 14px;
-    background: #eaf6e8;
-    border: 1px solid #b7ddb0;
-    border-radius: 8px;
-    font-size: 13px;
+.github-app-prompt:hover {
     color: #2d6a27;
-    line-height: 1.5;
+    text-decoration: underline;
 }
 
-.github-app-prompt strong { font-weight: 600; }
-
-.github-app-prompt a {
-    color: #2d6a27;
-    font-weight: 600;
-    text-decoration: none;
-    margin-left: 4px;
-}
-
-.github-app-prompt a:hover { text-decoration: underline; }
+.github-app-prompt svg { flex-shrink: 0; }
 
 /* ========== Dark Mode — Repo Picker ========== */
 [data-bs-theme="dark"] .repo-picker h6 { color: var(--dark-text-primary) !important; }
@@ -720,10 +689,6 @@ SOFTWARE.
 [data-bs-theme="dark"] .repo-picker-empty { color: var(--dark-text-muted) !important; }
 [data-bs-theme="dark"] .repo-picker-footer { color: var(--dark-text-secondary) !important; border-top-color: var(--dark-border) !important; }
 
-/* ========== Dark Mode — Token Section ========== */
-[data-bs-theme="dark"] .token-section h6 { color: var(--dark-text-primary) !important; }
-[data-bs-theme="dark"] .token-hint a { color: var(--dark-text-muted) !important; }
-
 /* ========== Dark Mode — GitHub App Prompt ========== */
-[data-bs-theme="dark"] .github-app-prompt { background: #1a3a18 !important; border-color: #2d5a28 !important; color: #7ec87a !important; }
-[data-bs-theme="dark"] .github-app-prompt a { color: #7ec87a !important; }
+[data-bs-theme="dark"] .github-app-prompt { color: var(--dark-text-muted) !important; }
+[data-bs-theme="dark"] .github-app-prompt:hover { color: #7ec87a !important; }

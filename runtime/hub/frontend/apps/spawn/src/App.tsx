@@ -108,7 +108,6 @@ function App() {
   const [repoValid, setRepoValid] = useState(false);
   const [paramWarning, setParamWarning] = useState('');
   const validateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [accessToken, setAccessToken] = useState('');
   const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([]);
   const [githubAppInstalled, setGithubAppInstalled] = useState(false);
 
@@ -281,7 +280,7 @@ function App() {
       setRepoValidating(true);
       validateTimerRef.current = setTimeout(async () => {
         try {
-          const result = await validateRepo(url, branch || undefined, accessToken || undefined);
+          const result = await validateRepo(url, branch || undefined);
           if (result.valid) {
             setRepoValid(true);
           } else {
@@ -294,35 +293,7 @@ function App() {
         }
       }, 800);
     }
-  }, [allowedGitProviders, accessToken]);
-
-  const handleAccessTokenChange = useCallback((value: string) => {
-    setAccessToken(value);
-
-    // Re-trigger repo validation with new token if there's a URL
-    if (validateTimerRef.current) clearTimeout(validateTimerRef.current);
-    const { url, branch } = normalizeRepoUrl(repoUrl);
-    const formatError = validateRepoUrl(url, allowedGitProviders);
-    if (!formatError && url) {
-      setRepoValidating(true);
-      validateTimerRef.current = setTimeout(async () => {
-        try {
-          const result = await validateRepo(url, branch || undefined, value || undefined);
-          if (result.valid) {
-            setRepoUrlError('');
-            setRepoValid(true);
-          } else {
-            setRepoUrlError(result.error);
-            setRepoValid(false);
-          }
-        } catch {
-          // API error — don't block the user
-        } finally {
-          setRepoValidating(false);
-        }
-      }, 800);
-    }
-  }, [repoUrl, allowedGitProviders]);
+  }, [allowedGitProviders]);
 
   const handleSelectGitHubRepo = useCallback((repo: GitHubRepo) => {
     const url = repo.html_url;
@@ -338,7 +309,7 @@ function App() {
       setRepoValidating(true);
       validateTimerRef.current = setTimeout(async () => {
         try {
-          const result = await validateRepo(normalizedUrl, branch || undefined, accessToken || undefined);
+          const result = await validateRepo(normalizedUrl, branch || undefined);
           if (result.valid) {
             setRepoValid(true);
             setRepoUrlError('');
@@ -352,7 +323,7 @@ function App() {
         }
       }, 300);
     }
-  }, [allowedGitProviders, accessToken]);
+  }, [allowedGitProviders]);
 
   const handleSelectAccelerator = useCallback((accelerator: Accelerator) => {
     setSelectedAcceleratorKey(accelerator.key);
@@ -410,8 +381,6 @@ function App() {
           value={selectedAccelerator?.key ?? ''}
         />
       )}
-      <input type="hidden" name="access_token" value={accessToken} />
-
       {/* Invalid query param warning */}
       {paramWarning && (
         <div className="warning-box">
@@ -455,8 +424,6 @@ function App() {
                 repoBranch={repoBranch}
                 onRepoUrlChange={handleRepoUrlChange}
                 allowedGitProviders={allowedGitProviders}
-                accessToken={accessToken}
-                onAccessTokenChange={handleAccessTokenChange}
                 githubAppName={githubAppName}
                 githubRepos={githubRepos}
                 githubAppInstalled={githubAppInstalled}

@@ -353,11 +353,6 @@ class RemoteLabKubeSpawner(KubeSpawner):
             repo_url = ""
 
         try:
-            access_token = formdata.get("access_token", [""])[0].strip()
-        except Exception:
-            access_token = ""
-
-        try:
             repo_branch = formdata.get("repo_branch", [""])[0].strip()
         except Exception:
             repo_branch = ""
@@ -366,8 +361,6 @@ class RemoteLabKubeSpawner(KubeSpawner):
             options["repo_url"] = repo_url
         if repo_branch:
             options["repo_branch"] = repo_branch
-        if access_token:
-            options["access_token"] = access_token
 
         return options
 
@@ -772,19 +765,14 @@ class RemoteLabKubeSpawner(KubeSpawner):
             repo_url = ""
             repo_branch = ""
 
+        # Token fallback: OAuth token (GitHub App) > default token secret
+        access_token = ""
         try:
-            access_token = str(self.user_options.get("access_token", "") or "").strip()
+            auth_state = await self.user.get_auth_state()
+            if auth_state and auth_state.get("access_token") and self.GITHUB_APP_NAME:
+                access_token = auth_state["access_token"]
         except Exception:
-            access_token = ""
-
-        # Token fallback: user PAT > OAuth token (GitHub App) > default token secret
-        if not access_token:
-            try:
-                auth_state = await self.user.get_auth_state()
-                if auth_state and auth_state.get("access_token") and self.GITHUB_APP_NAME:
-                    access_token = auth_state["access_token"]
-            except Exception:
-                pass
+            pass
 
         # Check if the selected resource permits git cloning
         resource_type = self.user_options.get("resource_type", "")
