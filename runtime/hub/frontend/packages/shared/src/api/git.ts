@@ -24,10 +24,26 @@ export interface ValidateRepoResult {
   error: string;
 }
 
-export async function validateRepo(url: string, branch?: string): Promise<ValidateRepoResult> {
+export async function validateRepo(url: string, branch?: string, accessToken?: string): Promise<ValidateRepoResult> {
   return apiRequest<ValidateRepoResult>("/validate-repo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, branch }),
+    body: JSON.stringify({ url, branch, access_token: accessToken || undefined }),
   });
+}
+
+export interface GitHubRepo {
+  full_name: string;
+  html_url: string;
+  private: boolean;
+  description: string;
+}
+
+export interface GitHubReposResponse {
+  repos: GitHubRepo[];
+  installed: boolean;
+}
+
+export async function fetchGitHubRepos(): Promise<GitHubReposResponse> {
+  return apiRequest<GitHubReposResponse>("/github/repos");
 }

@@ -69,6 +69,17 @@ custom:
       - bitbucket.org
     # Maximum time (seconds) allowed for a clone or fetch operation
     maxCloneTimeout: 300
+    # GitHub App slug name for private repo support (e.g. "aup-learning-cloud")
+    # When using GitHub App, also set hub.config.GitHubOAuthenticator with:
+    #   client_id: "<GitHub App Client ID>"
+    #   client_secret: "<GitHub App Client Secret>"
+    #   scope: []  # GitHub App does not use scope
+    githubAppName: ""
+    # Default access token for private repos (e.g. a bot/service account PAT).
+    # Used as fallback when user provides no PAT and no OAuth token is available.
+    # Priority: user PAT > OAuth token > defaultAccessToken
+    # Helm auto-creates a K8s Secret (jupyterhub-git-default-token) from this value.
+    defaultAccessToken: ""
 
   # ============================================================================
   # Accelerator Configuration
