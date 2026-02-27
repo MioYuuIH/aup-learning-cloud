@@ -49,6 +49,10 @@ on:
           - courses
           - base-cpu
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # ──────────────────────────────────────────────
   # Detect which files changed to decide what to build
@@ -98,7 +102,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Determine version tag
         id: version
@@ -116,8 +120,8 @@ jobs:
           file: dockerfiles/Hub/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/amdresearch/auplc-hub:${{ steps.version.outputs.tag }}
-            ghcr.io/amdresearch/auplc-hub:latest
+            ghcr.io/${{ github.repository_owner }}/auplc-hub:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/auplc-hub:latest
           cache-from: type=gha,scope=hub
           cache-to: type=gha,mode=max,scope=hub
 
@@ -143,7 +147,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Base CPU image
         uses: docker/build-push-action@v5
@@ -152,7 +156,7 @@ jobs:
           file: dockerfiles/Base/Dockerfile.cpu
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/amdresearch/auplc-default:latest
+            ghcr.io/${{ github.repository_owner }}/auplc-default:latest
           cache-from: type=gha,scope=base-cpu
           cache-to: type=gha,mode=max,scope=base-cpu
 
@@ -175,19 +179,19 @@ jobs:
       matrix:
         include:
           - course: CV
-            image: ghcr.io/amdresearch/auplc-cv
+            image_suffix: auplc-cv
             # build.sh: cp -r projects/CV -> course_data
             prepare: cp -r projects/CV dockerfiles/Courses/CV/course_data
           - course: DL
-            image: ghcr.io/amdresearch/auplc-dl
+            image_suffix: auplc-dl
             # build.sh: cp -r projects/DL -> course_data, also needs data/
             prepare: cp -r projects/DL dockerfiles/Courses/DL/course_data
           - course: LLM
-            image: ghcr.io/amdresearch/auplc-llm
+            image_suffix: auplc-llm
             # build.sh: cp -r projects/LLM -> LLM/
             prepare: cp -r projects/LLM dockerfiles/Courses/LLM/LLM
           - course: PhySim
-            image: ghcr.io/amdresearch/auplc-physim
+            image_suffix: auplc-physim
             # build.sh: cp -r projects/PhySim -> course_data
             prepare: cp -r projects/PhySim dockerfiles/Courses/PhySim/course_data
     steps:
@@ -202,7 +206,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare build context
         run: ${{ matrix.prepare }}
@@ -223,8 +227,8 @@ jobs:
           file: dockerfiles/Courses/${{ matrix.course }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ matrix.image }}:${{ steps.version.outputs.tag }}
-            ${{ matrix.image }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_suffix }}:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_suffix }}:latest
           cache-from: type=gha,scope=course-${{ matrix.course }}
           cache-to: type=gha,mode=max,scope=course-${{ matrix.course }}
 
@@ -256,5 +260,5 @@ jobs:
   #
   #     - name: Push Base GPU image
   #       run: |
-  #         echo "${{ secrets.GH_PACKAGES_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+  #         echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
   #         docker push ghcr.io/amdresearch/base-gfx1151:v0.1-full
