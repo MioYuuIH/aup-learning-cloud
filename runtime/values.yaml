@@ -18,34 +18,63 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# AUP Learning Cloud - Default Configuration
+# AUP Learning Cloud - Deployment Configuration
 #
 # Deploy with:
-#   helm install jupyterhub ./jupyterhub -n jupyterhub --create-namespace -f values.yaml
-
-# Authentication mode: "auto-login" | "dummy" | "github" | "multi"
-#   - auto-login: No credentials required, auto-login as 'student' (default, for single-node)
-#   - dummy: Accept any username/password (for testing)
-#   - github: GitHub OAuth authentication
-#   - multi: GitHub OAuth + Local accounts
+#   helm install jupyterhub ./chart -n jupyterhub --create-namespace -f values.yaml
 #
-# Auto-create admin user on first install (optional)
-# When enabled, helm install will:
-# 1. Generate random API token and admin password
-# 2. Store them in jupyterhub-admin-credentials secret
-# 3. Auto-configure admin user on hub startup
-# To get credentials after install:
-#   kubectl -n jupyterhub get secret jupyterhub-admin-credentials -o jsonpath='{.data.admin-password}' | base64 -d
-#   kubectl -n jupyterhub get secret jupyterhub-admin-credentials -o jsonpath='{.data.api-token}' | base64 -d
-custom:
-  authMode: "auto-login"
-  adminUser:
-    enabled: false  # Set to true to enable auto-admin creation
+# This file contains environment-specific overrides.
+# See chart/values.yaml for all available options and defaults.
+#
+# ============================================================================
+# Course Management Guide
+# ============================================================================
+# Add a new course:
+#   1. Add course image in custom.resources.images
+#   2. Add resource requirements in custom.resources.requirements
+#   3. Add team access permissions in custom.teams.mapping
+#
+# Modify a course:
+#   - Change image address or tag in images
+#   - Adjust CPU/memory/GPU settings in requirements
+#
+# Add a new accelerator:
+#   - Add new GPU/NPU node type in custom.accelerators
+# ============================================================================
 
-  # Accelerator configuration (GPU/NPU nodes)
-  # This centralizes all accelerator info: display, node selector, env, quota rate
+custom:
+  # Authentication mode
+  # - auto-login: No credentials required, auto-login as 'student' (for single-node dev)
+  # - dummy: Accept any username/password (for testing)
+  # - github: GitHub OAuth authentication
+  # - multi: GitHub OAuth + Local accounts
+  authMode: "auto-login"
+
+  # Auto-create admin user on first install
+  adminUser:
+    enabled: false
+
+  # ============================================================================
+  # Git Repository Cloning
+  # ============================================================================
+  # Users can provide an optional Git URL on the spawn form; the repo will be
+  # cloned into ~/home at container start via an init container.
+  gitClone:
+    # Container image used for git operations (must include git and sh)
+    initContainerImage: "alpine/git:2.47.2"
+    # Allowed Git hosting providers (subdomains are also accepted)
+    allowedProviders:
+      - github.com
+      - gitlab.com
+      - bitbucket.org
+    # Maximum time (seconds) allowed for a clone or fetch operation
+    maxCloneTimeout: 300
+
+  # ============================================================================
+  # Accelerator Configuration
+  # ============================================================================
+  # Define available GPU/NPU node types for course selection interface
   accelerators:
-    # GPU accelerators
     phx:
       displayName: "AMD Radeon™ 780M (Phoenix Point iGPU)"
       description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
@@ -75,7 +104,6 @@ custom:
         node-type: dgpu
       env: {}
       quotaRate: 4
-    # NPU accelerators (note: uses "type" label, not "node-type")
     strix-npu:
       displayName: "AMD XDNA2 (Strix Point NPU)"
       description: "AMD XDNA2 NPU with AI acceleration"
@@ -84,72 +112,157 @@ custom:
       env: {}
       quotaRate: 1
 
-  # User quota management system
-  # Quota controls container usage time (quota units consumed per minute)
+  # ============================================================================
+  # Course Resources Configuration
+  # ============================================================================
+  resources:
+    # Course Images
+    # Add new course images here
+    images:
+      cpu: "ghcr.io/amdresearch/auplc-default:latest"
+      gpu: "ghcr.io/amdresearch/base-gfx1151:v0.1-full"
+      Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
+      Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
+      Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
+      Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
+      # Custom-URL: "ghcr.io/amdresearch/auplc-cv:latest"
+
+    # Course Resource Requirements
+    # Define resource quotas for each course
+    requirements:
+      cpu:
+        cpu: "2"
+        memory: "4Gi"
+        memory_limit: "6Gi"
+      gpu:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-CV:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-DL:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-LLM:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      Course-PhySim:
+        cpu: "4"
+        memory: "16Gi"
+        memory_limit: "24Gi"
+        amd.com/gpu: "1"
+      # Custom-URL:
+      #   cpu: "4"
+      #   memory: "16Gi"
+      #   memory_limit: "24Gi"
+      #   amd.com/gpu: "1"
+      none:
+        cpu: "2"
+        memory: "4Gi"
+        memory_limit: "6Gi"
+
+    # Course Metadata (for spawn UI)
+    # Defines display information for each course
+    metadata:
+      cpu:
+        group: "CUSTOM REPO"
+        description: "Basic Python Environment"
+        subDescription: "CPU Only Environment"
+        accelerator: ""
+        acceleratorKeys: []
+        allowGitClone: true
+      gpu:
+        group: "CUSTOM REPO"
+        description: "Basic GPU Environment"
+        subDescription: "GPU Accelerated Environment"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+        allowGitClone: true
+      Course-CV:
+        group: "COURSE"
+        description: "Computer Vision Course"
+        subDescription: "Suitable for CV experiments with GPU"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+      Course-DL:
+        group: "COURSE"
+        description: "Deep Learning Course"
+        subDescription: "Suitable for DL experiments with GPU"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+      Course-LLM:
+        group: "COURSE"
+        description: "Large Language Models Course"
+        subDescription: "Suitable for LLM experiments with GPU"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+      Course-PhySim:
+        group: "COURSE"
+        description: "Genesis Physical Simulation Course"
+        subDescription: "Suitable for physical simulation experiments with GPU"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+
+  # ============================================================================
+  # Team Permission Configuration
+  # ============================================================================
+  # Define which teams can access which courses
+  teams:
+    mapping:
+      cpu:
+        - cpu
+      gpu:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      official:
+        - cpu
+        - gpu
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      AUP:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+      native-users:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+
+  # ============================================================================
+  # Quota Management
+  # ============================================================================
   quota:
-    # Enable/disable quota system (auto-disabled for auto-login/dummy modes if not set)
-    enabled: null  # null = auto-detect based on authMode
-
-    # CPU-only quota rate (when no accelerator selected)
+    # Enable quota system (auto-disabled for auto-login/dummy modes if not set)
+    enabled: null
+    # CPU-only quota consumption rate
     cpuRate: 1
-
     # Minimum quota required to start any container
     minimumToStart: 10
-
-    # Default quota for new users (0 = no initial allocation, must be set by admin)
-    # When a new user first attempts to use the system, they will be automatically
-    # granted this amount of quota
+    # Default quota for new users (0 = no initial allocation)
     defaultQuota: 0
-
     # Auto-refresh rules: each rule generates a K8s CronJob
-    #
-    # Action modes:
-    #   add: Add amount to current balance (default). Use negative for deduction.
-    #   set: Set balance to exact amount
-    #
-    # Targets support flexible filtering:
-    #   includeUnlimited: bool - include unlimited users (default: false)
-    #   balanceBelow: int - only if balance < this value
-    #   balanceAbove: int - only if balance > this value
-    #   includeUsers: list - only these users
-    #   excludeUsers: list - exclude these users
-    #   usernamePattern: str - regex pattern for username matching
     refreshRules: {}
-    # Example:
-    # refreshRules:
-    #   daily-topup:
-    #     enabled: true
-    #     schedule: "0 0 * * *"
-    #     action: add              # add (default) / set
-    #     amount: 100              # positive = add, negative = deduct
-    #     maxBalance: 500          # cap (for positive add)
-    #     minBalance: 0            # floor (for negative add)
-    #     targets:
-    #       includeUnlimited: false
-    #       balanceBelow: 400
-    #   monthly-reset:
-    #     enabled: true
-    #     schedule: "0 0 1 * *"
-    #     action: set              # set everyone to 500
-    #     amount: 500
-    #     targets:
-    #       includeUnlimited: false
-    #   weekly-decay:
-    #     enabled: false
-    #     schedule: "0 0 * * 0"
-    #     amount: -50              # negative = deduct 50 each week
-    #     minBalance: 0
-    #     targets:
-    #       balanceAbove: 100
 
 # Use K3s built-in local-path storage (no NFS required)
 hub:
-  # Service account for quota refresh CronJob
-  services:
-    quota-refresh:
-      admin: true
-      # apiToken will be auto-generated by z2jh
-
   db:
     pvc:
       storageClassName: local-path
@@ -158,51 +271,11 @@ hub:
     tag: latest
     pullPolicy: IfNotPresent
 
-  extraConfig:
-    01-api-token: |
-      import os
-      api_token = os.environ.get('JUPYTERHUB_API_TOKEN')
-      if api_token:
-          c.JupyterHub.api_tokens = {api_token: "admin"}
-          print("✅ API token loaded for admin user")
-
-    02-templates-and-static: |
-      import os
-      template_path = os.environ.get('JUPYTERHUB_TEMPLATE_PATH', '/tmp/custom_templates')
-      c.JupyterHub.template_paths = [template_path]
-
-    03-auto-create-admin: |
-      import os
-      import dbm
-      import bcrypt
-
-      admin_password = os.environ.get('JUPYTERHUB_ADMIN_PASSWORD', '')
-      admin_username = 'admin'
-
-      # Set admin user
-      if admin_password:
-          c.Authenticator.admin_users = {admin_username}
-          print(f"✅ Admin user configured: {admin_username}")
-
-          passwords_dbm = '/srv/jupyterhub/passwords.dbm'
-          try:
-              with dbm.open(passwords_dbm, 'r') as db:
-                  if admin_username in db:
-                      print(f"✅ Admin '{admin_username}' password already set")
-                      admin_password = None
-          except:
-              pass
-
-          if admin_password:
-              with dbm.open(passwords_dbm, 'c', 0o600) as db:
-                  db[admin_username] = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
-              print(f"✅ Admin '{admin_username}' password set automatically")
-
-    04-hide-logout-for-autologin: |
-      # Hide logout button in auto-login mode
-      if AUTH_MODE == "auto-login":
-          c.JupyterHub.template_vars = {"hide_logout": True}
-          print("[INFO] Auto-login mode: logout button hidden")
+  # Additional Python config snippets (executed after core/setup.py)
+  # Example:
+  #   myconfig: |
+  #     c.JupyterHub.some_setting = "value"
+  extraConfig: {}
 
   extraFiles:
     announcement.txt:
@@ -215,21 +288,6 @@ hub:
           <p>My location is on <code>runtime/values.yaml</code></p>
           <p>You can edit this via <strong>ConfigMap</strong> without rebuilding the image.</p>
           </div>
-
-  # Environment variables from secrets (for auto-admin feature)
-  extraEnv:
-    - name: JUPYTERHUB_API_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: jupyterhub-admin-credentials
-          key: api-token
-          optional: true
-    - name: JUPYTERHUB_ADMIN_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: jupyterhub-admin-credentials
-          key: admin-password
-          optional: true
 
   config:
     # ---- Hub Core ----

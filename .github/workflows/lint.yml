@@ -23,11 +23,11 @@ jobs:
         run: ruff format --check .
 
   frontend-lint:
-    name: Frontend (ESLint + Prettier)
+    name: Frontend (ESLint + TypeScript)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: runtime/admin/frontend/admin-frontend
+        working-directory: runtime/hub/frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
-          cache-dependency-path: runtime/admin/frontend/admin-frontend/pnpm-lock.yaml
+          cache-dependency-path: runtime/hub/frontend/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install
@@ -48,11 +48,8 @@ jobs:
       - name: Run ESLint
         run: pnpm run lint
 
-      - name: Run Prettier check
-        run: pnpm run format:check
-
-      - name: Run TypeScript check
-        run: pnpm run type-check
+      - name: Build (TypeScript check)
+        run: pnpm run build
 
   shell-lint:
     name: Shell (ShellCheck)

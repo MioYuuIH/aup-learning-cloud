@@ -256,7 +256,7 @@ bash scripts/helm_upgrade.bash
 
 ```bash
 cd runtime
-helm upgrade jupyterhub ./jupyterhub --namespace jupyterhub -f values-local.yaml
+helm upgrade jupyterhub ./chart --namespace jupyterhub -f values-local.yaml
 ```
 
 ### 5. Verify Deployment
@@ -318,7 +318,7 @@ class CustomFirstUseAuthenticator(FirstUseAuthenticator):
 3. **Regenerate credentials**:
    ```bash
    kubectl -n jupyterhub delete secret jupyterhub-admin-credentials
-   helm upgrade jupyterhub ./jupyterhub -n jupyterhub -f values-local.yaml
+   helm upgrade jupyterhub ./chart -n jupyterhub -f values-local.yaml
    ```
 
 ### Issue: Admin not created on install

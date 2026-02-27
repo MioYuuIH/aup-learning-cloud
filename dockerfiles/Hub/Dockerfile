@@ -17,75 +17,77 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# ========== Global build arguments ==========
+# Global build arguments
 ARG NODE_IMAGE=node:20-alpine
 ARG HUB_IMAGE=quay.io/jupyterhub/k8s-hub:4.1.0
 ARG NPM_REGISTRY=
 ARG PIP_INDEX_URL=
 
-# ========== Stage 1: Build Admin UI ==========
-FROM ${NODE_IMAGE} AS admin-ui-builder
+# Stage 1: Build frontend (monorepo)
+FROM ${NODE_IMAGE} AS frontend-builder
 ARG NPM_REGISTRY
 
 WORKDIR /app
 
-# Install pnpm and configure registry if specified
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.27.0 --activate
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
 
-# Copy package files
-COPY admin-ui/package.json admin-ui/pnpm-lock.yaml ./
+# Copy monorepo configuration and lockfile
+COPY runtime/hub/frontend/pnpm-workspace.yaml runtime/hub/frontend/pnpm-lock.yaml runtime/hub/frontend/.npmrc runtime/hub/frontend/package.json runtime/hub/frontend/tsconfig.base.json ./
 
-# Install dependencies
+# Copy package.json files for dependency installation
+COPY runtime/hub/frontend/packages/shared/package.json ./packages/shared/
+COPY runtime/hub/frontend/apps/admin/package.json ./apps/admin/
+COPY runtime/hub/frontend/apps/spawn/package.json ./apps/spawn/
+
+# Install dependencies with frozen lockfile
 RUN pnpm install --frozen-lockfile
 
-# Copy source files
-COPY admin-ui/ ./
+# Copy source code
+COPY runtime/hub/frontend/packages/ ./packages/
+COPY runtime/hub/frontend/apps/ ./apps/
 
-# Build the React app
+# Build all packages
 RUN pnpm run build
 
-# ========== Stage 2: Final Hub Image ==========
+# Stage 2: Final Hub image
 FROM ${HUB_IMAGE}
 ARG PIP_INDEX_URL
 
-# Switch to root for setup
 USER root
 
-# Create the needed folders
-RUN mkdir -p /tmp/custom_templates
-RUN mkdir -p /tmp/custom_templates/static/css
-RUN mkdir -p /tmp/custom_templates/static/js
-RUN mkdir -p /usr/local/share/jupyterhub/static/admin-ui
+# Frontend: templates and static files
+RUN mkdir -p /tmp/custom_templates/static/css /tmp/custom_templates/static/js \
+    /usr/local/share/jupyterhub/static/admin-ui \
+    /usr/local/share/jupyterhub/static/spawn-ui
 
-# Copy template files with correct permissions
-COPY --chmod=644 templates/ /tmp/custom_templates/
+COPY --chmod=644 runtime/hub/frontend/templates/ /tmp/custom_templates/
+COPY --from=frontend-builder /app/apps/admin/dist/ /usr/local/share/jupyterhub/static/admin-ui/
+COPY --from=frontend-builder /app/apps/spawn/dist/ /usr/local/share/jupyterhub/static/spawn-ui/
+RUN chown -R 1000:1000 /usr/local/share/jupyterhub/static/admin-ui/ \
+    /usr/local/share/jupyterhub/static/spawn-ui/
 
-# Copy admin-ui build output
-COPY --from=admin-ui-builder /app/dist/ /usr/local/share/jupyterhub/static/admin-ui/
+# Backend: Python dependencies and core logic
+RUN pip install --no-cache-dir uv
 
-# Fix permissions
-RUN chown -R 1000:1000 /usr/local/share/jupyterhub/static/admin-ui/
-
-# Install Python packages as root
+COPY runtime/hub/requirements.txt /tmp/requirements.txt
 RUN if [ -n "${PIP_INDEX_URL}" ]; then \
-        pip install -i "${PIP_INDEX_URL}" jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic; \
+        uv pip install --system --index-url "${PIP_INDEX_URL}" -r /tmp/requirements.txt; \
     else \
-        pip install jupyterhub-multiauthenticator jupyterhub-firstuseauthenticator pydantic; \
+        uv pip install --system -r /tmp/requirements.txt; \
     fi
 
-# Switch back to jovyan user
-USER jovyan
+COPY runtime/hub/core/ /usr/local/lib/core/
+RUN chown -R 1000:1000 /usr/local/lib/core/ && \
+    find /usr/local/lib/core/ -type d -exec chmod 755 {} \; && \
+    find /usr/local/lib/core/ -type f -exec chmod 644 {} \;
 
-# Set environment variable for template path
+ENV PYTHONPATH="/usr/local/lib"
+
+# Finalize
+USER jovyan
 ENV JUPYTERHUB_TEMPLATE_PATH=/tmp/custom_templates
 
-RUN echo "=== Verifying template files ===" && \
-    ls -la /tmp/custom_templates && \
-    echo "=== Checking for resource_options_form.html ===" && \
-    ls -la /tmp/custom_templates/resource_options_form.html && \
-    echo "=== Checking static directory ===" && \
-    ls -la /tmp/custom_templates/static/ && \
-    echo "=== Checking admin-ui ===" && \
+RUN ls -la /tmp/custom_templates && \
     ls -la /usr/local/share/jupyterhub/static/admin-ui/ && \
-    echo "=== Template verification complete ==="
+    ls -la /usr/local/share/jupyterhub/static/spawn-ui/
