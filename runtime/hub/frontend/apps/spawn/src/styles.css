@@ -107,8 +107,13 @@ SOFTWARE.
     margin-bottom: 20px;
     border: 1px solid #e0e0e0;
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.collapsed .resource-category,
+.resource-category.collapsed {
+    overflow: hidden;
 }
 
 .resource-category-header {
@@ -145,7 +150,7 @@ SOFTWARE.
 
 .collapsible-content {
     max-height: 2000px;
-    overflow: hidden;
+    overflow: visible;
     transition: max-height 0.3s ease-out, padding 0.3s ease-out;
     background: #ffffff;
     padding: 20px;
@@ -154,6 +159,7 @@ SOFTWARE.
 .collapsed .collapsible-content {
     max-height: 0;
     padding: 0 20px;
+    overflow: hidden;
 }
 
 .resource-container {
