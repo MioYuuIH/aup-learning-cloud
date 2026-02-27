@@ -48,11 +48,7 @@ class CustomMultiAuthenticator(MultiAuthenticator):
         # itself and are legitimate; block them only when they don't come
         # from a registered prefix.
         if PREFIX_SEPARATOR in username:
-            known_prefixes = [
-                a.username_prefix
-                for a in self._authenticators
-                if a.username_prefix
-            ]
+            known_prefixes = [a.username_prefix for a in self._authenticators if a.username_prefix]
             if not any(username.startswith(p) for p in known_prefixes):
                 return False
         return True
