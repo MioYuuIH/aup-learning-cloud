@@ -64,8 +64,13 @@ jobs:
       hub: ${{ steps.filter.outputs.hub }}
       courses: ${{ steps.filter.outputs.courses }}
       base-cpu: ${{ steps.filter.outputs.base-cpu }}
+      registry: ${{ steps.registry.outputs.prefix }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set registry prefix
+        id: registry
+        run: echo "prefix=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - uses: dorny/paths-filter@v3
         id: filter
@@ -120,8 +125,8 @@ jobs:
           file: dockerfiles/Hub/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/auplc-hub:${{ steps.version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/auplc-hub:latest
+            ${{ needs.changes.outputs.registry }}/auplc-hub:${{ steps.version.outputs.tag }}
+            ${{ needs.changes.outputs.registry }}/auplc-hub:latest
           cache-from: type=gha,scope=hub
           cache-to: type=gha,mode=max,scope=hub
 
@@ -156,7 +161,7 @@ jobs:
           file: dockerfiles/Base/Dockerfile.cpu
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/auplc-default:latest
+            ${{ needs.changes.outputs.registry }}/auplc-default:latest
           cache-from: type=gha,scope=base-cpu
           cache-to: type=gha,mode=max,scope=base-cpu
 
@@ -227,8 +232,8 @@ jobs:
           file: dockerfiles/Courses/${{ matrix.course }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_suffix }}:${{ steps.version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_suffix }}:latest
+            ${{ needs.changes.outputs.registry }}/${{ matrix.image_suffix }}:${{ steps.version.outputs.tag }}
+            ${{ needs.changes.outputs.registry }}/${{ matrix.image_suffix }}:latest
           cache-from: type=gha,scope=course-${{ matrix.course }}
           cache-to: type=gha,mode=max,scope=course-${{ matrix.course }}
 
