@@ -524,6 +524,7 @@ SOFTWARE.
 
 .repo-picker {
     margin-bottom: 14px;
+    position: relative;
 }
 
 .repo-picker h6 {
@@ -578,6 +579,11 @@ SOFTWARE.
 .repo-picker-trigger.open .repo-picker-chevron { transform: rotate(180deg); }
 
 .repo-picker-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 10;
     border: 1px solid #2c3e50;
     border-top: none;
     border-radius: 0 0 8px 8px;
@@ -586,6 +592,7 @@ SOFTWARE.
     display: flex;
     flex-direction: column;
     background: #f8f9fc;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .repo-picker-filter {
