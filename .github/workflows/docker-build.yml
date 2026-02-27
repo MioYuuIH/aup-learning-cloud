@@ -23,26 +23,68 @@ on:
   push:
     branches: [main]
     paths:
-      - 'runtime/Dockerfile/**'
       - 'dockerfiles/**'
+      - 'runtime/hub/**'
+      - 'projects/**'
   pull_request:
     branches: [main]
     paths:
-      - 'runtime/Dockerfile/**'
       - 'dockerfiles/**'
+      - 'runtime/hub/**'
+      - 'projects/**'
   workflow_dispatch:
     inputs:
-      override_versions:
-        description: 'Override all versions (leave empty to use default versions)'
-        required: false
       version:
-        description: 'Version tag (e.g. v1.6)'
+        description: 'Version tag for images (e.g. v1.2.0)'
+        required: false
+        default: ''
+      images:
+        description: 'Which images to build'
         required: true
-        default: 'v1.0'
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - hub
+          - courses
+          - base-cpu
 
 jobs:
+  # ──────────────────────────────────────────────
+  # Detect which files changed to decide what to build
+  # ──────────────────────────────────────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      hub: ${{ steps.filter.outputs.hub }}
+      courses: ${{ steps.filter.outputs.courses }}
+      base-cpu: ${{ steps.filter.outputs.base-cpu }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            hub:
+              - 'dockerfiles/Hub/**'
+              - 'runtime/hub/**'
+            courses:
+              - 'dockerfiles/Courses/**'
+              - 'projects/**'
+            base-cpu:
+              - 'dockerfiles/Base/Dockerfile.cpu'
+
+  # ──────────────────────────────────────────────
+  # Hub Image (CPU only, runs on GitHub Actions)
+  # ──────────────────────────────────────────────
   build-hub:
     name: Build Hub Image
+    needs: changes
+    if: |
+      needs.changes.outputs.hub == 'true' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.images == 'all' || github.event.inputs.images == 'hub')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -57,6 +99,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GH_PACKAGES_TOKEN }}
+
+      - name: Determine version tag
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build and push Hub image
         uses: docker/build-push-action@v5
@@ -65,24 +116,21 @@ jobs:
           file: dockerfiles/Hub/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/amdresearch/auplc-hub:${{ github.event.inputs.override_versions || 'v1.2.0' }}
+            ghcr.io/amdresearch/auplc-hub:${{ steps.version.outputs.tag }}
             ghcr.io/amdresearch/auplc-hub:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=hub
+          cache-to: type=gha,mode=max,scope=hub
 
-  build-notebooks:
-    name: Build Notebook Images
+  # ──────────────────────────────────────────────
+  # Base CPU Image (runs on GitHub Actions)
+  # ──────────────────────────────────────────────
+  build-base-cpu:
+    name: Build Base CPU Image
+    needs: changes
+    if: |
+      needs.changes.outputs.base-cpu == 'true' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.images == 'all' || github.event.inputs.images == 'base-cpu')
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - docker_path: runtime/Dockerfile/Basic
-            image_name: aup-cpu-notebook
-            default_version: 'v1.0'
-          - docker_path: runtime/Dockerfile/RyzenAI-ONNX
-            image_name: aup-ryzenai-onnx-notebook
-            default_version: 'v2.0'
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -97,14 +145,116 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GH_PACKAGES_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push Base CPU image
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.docker_path }}
-          file: ${{ matrix.docker_path }}/Dockerfile
+          context: dockerfiles/Base
+          file: dockerfiles/Base/Dockerfile.cpu
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/amdresearch/${{ matrix.image_name }}:${{ github.event.inputs.override_versions || matrix.default_version }}
-            ghcr.io/amdresearch/${{ matrix.image_name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ghcr.io/amdresearch/auplc-default:latest
+          cache-from: type=gha,scope=base-cpu
+          cache-to: type=gha,mode=max,scope=base-cpu
+
+  # ──────────────────────────────────────────────
+  # Course Images (CV, DL, LLM, PhySim)
+  #
+  # These images use `FROM ghcr.io/amdresearch/base-gfx1151:v0.1-full`
+  # which is pre-built and pushed to GHCR. The build itself only copies
+  # files and installs pip packages — no GPU required.
+  # ──────────────────────────────────────────────
+  build-courses:
+    name: "Build Course: ${{ matrix.course }}"
+    needs: changes
+    if: |
+      needs.changes.outputs.courses == 'true' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.images == 'all' || github.event.inputs.images == 'courses')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - course: CV
+            image: ghcr.io/amdresearch/auplc-cv
+            # build.sh: cp -r projects/CV -> course_data
+            prepare: cp -r projects/CV dockerfiles/Courses/CV/course_data
+          - course: DL
+            image: ghcr.io/amdresearch/auplc-dl
+            # build.sh: cp -r projects/DL -> course_data, also needs data/
+            prepare: cp -r projects/DL dockerfiles/Courses/DL/course_data
+          - course: LLM
+            image: ghcr.io/amdresearch/auplc-llm
+            # build.sh: cp -r projects/LLM -> LLM/
+            prepare: cp -r projects/LLM dockerfiles/Courses/LLM/LLM
+          - course: PhySim
+            image: ghcr.io/amdresearch/auplc-physim
+            # build.sh: cp -r projects/PhySim -> course_data
+            prepare: cp -r projects/PhySim dockerfiles/Courses/PhySim/course_data
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_PACKAGES_TOKEN }}
+
+      - name: Prepare build context
+        run: ${{ matrix.prepare }}
+
+      - name: Determine version tag
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push ${{ matrix.course }} image
+        uses: docker/build-push-action@v5
+        with:
+          context: dockerfiles/Courses/${{ matrix.course }}
+          file: dockerfiles/Courses/${{ matrix.course }}/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ matrix.image }}:${{ steps.version.outputs.tag }}
+            ${{ matrix.image }}:latest
+          cache-from: type=gha,scope=course-${{ matrix.course }}
+          cache-to: type=gha,mode=max,scope=course-${{ matrix.course }}
+
+  # ──────────────────────────────────────────────
+  # Base GPU Image (gfx1151)
+  #
+  # Requires self-hosted runner with GPU access.
+  # Only triggered via workflow_dispatch — build manually
+  # on a GPU machine until a self-hosted runner is configured.
+  #
+  # To set up a self-hosted runner:
+  #   1. Go to repo Settings → Actions → Runners → New self-hosted runner
+  #   2. Install the runner on your GPU machine (e.g., NV20)
+  #   3. Add label: gpu-builder
+  #   4. Uncomment the job below
+  # ──────────────────────────────────────────────
+  # build-base-gpu:
+  #   name: Build Base GPU Image (gfx1151)
+  #   if: github.event_name == 'workflow_dispatch'
+  #   runs-on: [self-hosted, gpu-builder]
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Build Base GPU image
+  #       run: |
+  #         cd dockerfiles/Base
+  #         docker build -t ghcr.io/amdresearch/base-gfx1151:v0.1-full -f Dockerfile.gfx1151 .
+  #
+  #     - name: Push Base GPU image
+  #       run: |
+  #         echo "${{ secrets.GH_PACKAGES_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+  #         docker push ghcr.io/amdresearch/base-gfx1151:v0.1-full
