@@ -30,9 +30,9 @@ import logging
 import time
 
 from oauthenticator.github import GitHubOAuthenticator
+from oauthenticator.oauth2 import OAuthCallbackHandler
 
 log = logging.getLogger("jupyterhub.auth.github")
-from oauthenticator.oauth2 import OAuthCallbackHandler
 
 
 class _GitHubAppInstallCallbackHandler(OAuthCallbackHandler):
