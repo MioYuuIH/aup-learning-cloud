@@ -39,6 +39,24 @@ class CustomMultiAuthenticator(MultiAuthenticator):
     Delegates ``refresh_user`` to the sub-authenticator that owns the user.
     """
 
+    def validate_username(self, username):
+        """Reject usernames that could spoof a prefixed authenticator."""
+        if not super().validate_username(username):
+            return False
+        # Only local (unprefixed) accounts need checking.
+        # Prefixed names like "github:user" are created by the OAuth flow
+        # itself and are legitimate; block them only when they don't come
+        # from a registered prefix.
+        if PREFIX_SEPARATOR in username:
+            known_prefixes = [
+                a.username_prefix
+                for a in self._authenticators
+                if a.username_prefix
+            ]
+            if not any(username.startswith(p) for p in known_prefixes):
+                return False
+        return True
+
     def _find_authenticator_for_user(self, user):
         """Return the sub-authenticator whose prefix matches *user.name*.
 
