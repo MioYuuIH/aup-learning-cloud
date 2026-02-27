@@ -22,6 +22,7 @@ name: Build Docker Images
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths:
       - 'dockerfiles/**'
       - 'runtime/hub/**'
@@ -51,7 +52,7 @@ on:
           - courses
           - base-cpu
 
-# Prevent duplicate builds on the same branch
+# Prevent duplicate builds on the same branch / PR
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -72,6 +73,7 @@ jobs:
       courses: ${{ steps.filter.outputs.courses }}
       base-cpu: ${{ steps.filter.outputs.base-cpu }}
       registry: ${{ steps.registry.outputs.prefix }}
+      is-tag: ${{ steps.check.outputs.is-tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -79,7 +81,17 @@ jobs:
         id: registry
         run: echo "prefix=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
+      - name: Check if tag push
+        id: check
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "is-tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: dorny/paths-filter@v3
+        if: github.ref_type != 'tag'
         id: filter
         with:
           filters: |
@@ -100,6 +112,7 @@ jobs:
     name: Build Hub Image
     needs: changes
     if: |
+      needs.changes.outputs.is-tag == 'true' ||
       needs.changes.outputs.hub == 'true' ||
       github.event_name == 'workflow_dispatch' && (github.event.inputs.images == 'all' || github.event.inputs.images == 'hub')
     runs-on: ubuntu-latest
@@ -124,6 +137,9 @@ jobs:
         with:
           images: ${{ needs.changes.outputs.registry }}/auplc-hub
           tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
@@ -148,6 +164,7 @@ jobs:
     name: Build Base CPU Image
     needs: changes
     if: |
+      needs.changes.outputs.is-tag == 'true' ||
       needs.changes.outputs.base-cpu == 'true' ||
       github.event_name == 'workflow_dispatch' && (github.event.inputs.images == 'all' || github.event.inputs.images == 'base-cpu')
     runs-on: ubuntu-latest
@@ -172,6 +189,8 @@ jobs:
         with:
           images: ${{ needs.changes.outputs.registry }}/auplc-default
           tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-
             type=ref,event=pr
@@ -199,6 +218,7 @@ jobs:
     name: "Build Course: ${{ matrix.course }}"
     needs: changes
     if: |
+      needs.changes.outputs.is-tag == 'true' ||
       needs.changes.outputs.courses == 'true' ||
       github.event_name == 'workflow_dispatch' && (github.event.inputs.images == 'all' || github.event.inputs.images == 'courses')
     runs-on: ubuntu-latest
@@ -253,6 +273,9 @@ jobs:
         with:
           images: ${{ needs.changes.outputs.registry }}/${{ matrix.image_suffix }}
           tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
