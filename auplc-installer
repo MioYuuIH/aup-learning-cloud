@@ -450,7 +450,8 @@ Commands:
   install-tools         Install helm and k9s
 
   rt install            Deploy JupyterHub runtime only
-  rt upgrade            Upgrade JupyterHub runtime
+  rt reinstall          Reinstall JupyterHub runtime (For container images changes)
+  rt upgrade            Upgrade JupyterHub runtime (For vaules.yaml changes)
   rt remove             Remove JupyterHub runtime
 
   img build             Build all custom images
@@ -495,7 +496,11 @@ case "$1" in
             install) deply_aup_learning_cloud_runtime ;;
             upgrade) upgrade_aup_learning_cloud_runtime ;;
             remove) remove_aup_learning_cloud_runtime ;;
-            *) echo "Usage: $0 rt {install|upgrade|remove}"; exit 1 ;;
+            reinstall)
+                remove_aup_learning_cloud_runtime || true
+                deply_aup_learning_cloud_runtime
+                ;;
+            *) echo "Usage: $0 rt {install|upgrade|remove|reinstall}"; exit 1 ;;
         esac
         ;;
     img)
