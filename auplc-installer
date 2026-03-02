@@ -498,6 +498,7 @@ case "$1" in
             remove) remove_aup_learning_cloud_runtime ;;
             reinstall)
                 remove_aup_learning_cloud_runtime || true
+                sleep 0.5
                 deply_aup_learning_cloud_runtime
                 ;;
             *) echo "Usage: $0 rt {install|upgrade|remove|reinstall}"; exit 1 ;;
