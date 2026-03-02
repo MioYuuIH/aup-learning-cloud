@@ -56,11 +56,13 @@ sudo apt install build-essential
 ### Installation
 ```bash
 git clone https://github.com/AMDResearch/aup-learning-cloud.git
-cd aup-learning-cloud/deploy/
-sudo ./single-node.sh install
+cd aup-learning-cloud
+sudo ./auplc-installer install
 ```
 
 After installation completes, open http://localhost:30890 in your browser. No login credentials are required - you will be automatically logged in.
+
+The installer uses **Docker as the default container runtime** (`K3S_USE_DOCKER=1`), so images you build locally (e.g. `img build hub`) are visible to K3s after `rt upgrade` without exporting or restarting. For offline or containerd-based deployment, use `K3S_USE_DOCKER=0 ./auplc-installer install`.
 
 ### Script Commands
 
@@ -68,23 +70,27 @@ After installation completes, open http://localhost:30890 in your browser. No lo
 |---------|-------------|
 | `install` | Full installation (K3s, tools, GPU plugin, images, JupyterHub) |
 | `uninstall` | Complete removal of all components |
-| `upgrade-runtime` | Upgrade JupyterHub deployment |
-| `build-images` | Build and import container images |
-| `pull-images` | Pull external images for offline use |
 | `install-tools` | Install Helm and K9s only |
-| `install-runtime` | Deploy JupyterHub only |
-| `remove-runtime` | Remove JupyterHub only |
+| `rt install` | Deploy JupyterHub runtime only |
+| `rt upgrade` | Upgrade JupyterHub (e.g. after `values.yaml` changes) |
+| `rt reinstall` | Uninstall then install (e.g. after container image changes) |
+| `rt remove` | Remove JupyterHub runtime |
+| `img build` | Build all custom images |
+| `img build [target...]` | Build specific images (e.g. `img build hub`, `img build hub cv`). Targets: `hub`, `base-cpu`, `base-gfx1151`, `cv`, `dl`, `llm`, `physim` |
+| `img pull` | Pull external images for offline use |
 
-Example:
+Examples:
 ```bash
 # Upgrade JupyterHub after configuration changes
-sudo ./single-node.sh upgrade-runtime
+sudo ./auplc-installer rt upgrade
 
-# Rebuild images after modifying Dockerfiles
-sudo ./single-node.sh build-images
+# Rebuild only the hub image and apply (Docker mode)
+sudo ./auplc-installer img build && sudo ./auplc-installer rt reinstall
 ```
 
-> **💡 Tip**: If you need to use alternative container registries or package mirrors, see [Mirror Configuration](deploy/README.md#mirror-configuration).
+Legacy long forms are still supported: `install-runtime`, `upgrade-runtime`, `remove-runtime`, `build-images`, `pull-images`.
+
+> **💡 Tip**: For mirror configuration (registries, PyPI, npm), see [Mirror Configuration](deploy/README.md#mirror-configuration).
 ## Manual Installation
 
 For users who prefer step-by-step manual installation or need more control over the deployment process:
