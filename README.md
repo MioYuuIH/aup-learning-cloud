@@ -59,44 +59,21 @@ git clone https://github.com/AMDResearch/aup-learning-cloud.git
 cd aup-learning-cloud
 sudo ./auplc-installer install
 ```
-
 After installation completes, open http://localhost:30890 in your browser. No login credentials are required - you will be automatically logged in.
+The installer uses **Docker as the default container runtime** (`K3S_USE_DOCKER=1`), see more at [link])(https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html#runtime-and-mirror-configuration)
 
-The installer uses **Docker as the default container runtime** (`K3S_USE_DOCKER=1`), so images you build locally (e.g. `img build hub`) are visible to K3s after `rt upgrade` without exporting or restarting. For offline or containerd-based deployment, use `K3S_USE_DOCKER=0 ./auplc-installer install`.
 
-### Script Commands
-
-| Command | Description |
-|---------|-------------|
-| `install` | Full installation (K3s, tools, GPU plugin, images, JupyterHub) |
-| `uninstall` | Complete removal of all components |
-| `install-tools` | Install Helm and K9s only |
-| `rt install` | Deploy JupyterHub runtime only |
-| `rt upgrade` | Upgrade JupyterHub (e.g. after `values.yaml` changes) |
-| `rt reinstall` | Uninstall then install (e.g. after container image changes) |
-| `rt remove` | Remove JupyterHub runtime |
-| `img build` | Build all custom images |
-| `img build [target...]` | Build specific images (e.g. `img build hub`, `img build hub cv`). Targets: `hub`, `base-cpu`, `base-gfx1151`, `cv`, `dl`, `llm`, `physim` |
-| `img pull` | Pull external images for offline use |
-
-Examples:
+### Uninstall
 ```bash
-# Upgrade JupyterHub after configuration changes
-sudo ./auplc-installer rt upgrade
-
-# Rebuild only the hub image and apply (Docker mode)
-sudo ./auplc-installer img build && sudo ./auplc-installer rt reinstall
+sudo ./auplc-installer uninstall
 ```
 
-Legacy long forms are still supported: `install-runtime`, `upgrade-runtime`, `remove-runtime`, `build-images`, `pull-images`.
-
 > **💡 Tip**: For mirror configuration (registries, PyPI, npm), see [Mirror Configuration](deploy/README.md#mirror-configuration).
-## Manual Installation
 
-For users who prefer step-by-step manual installation or need more control over the deployment process:
+## Cluster Installation
+For multi-node cluster installation or need more control over the deployment process:
 
-- [Single-Node Manual Deployment](deploy/README.md#single-node-deployment) - Detailed manual setup for development and demo environments
-- [Multi-Node Cluster Deployment](deploy/README.md#multi-node-cluster-deployment) - Production deployment with Ansible playbooks
+- [Multi-Node Cluster Deployment](https://amdresearch.github.io/aup-learning-cloud/installation/multi-node.html) - Production deployment with Ansible playbooks
 
 ## Learning Solution
 
