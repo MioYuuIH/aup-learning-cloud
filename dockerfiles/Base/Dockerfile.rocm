@@ -31,15 +31,14 @@ ARG NB_GID=100
 # GPU target and ROCm version — override at build time
 #
 # Supported GPU_TARGET values:
-#   gfx110X-all   RDNA 3   — gfx1100/1101/1102/1103 (dGPU)
-#   gfx1150       RDNA 3.5 — Strix (Radeon 890M)
-#   gfx1151       RDNA 3.5 — Strix Halo (Radeon 8060S)
-#   gfx1152       RDNA 3.5
-#   gfx120X-all   RDNA 4   — gfx1201 (dGPU)
+#   gfx110x       RDNA 3   — gfx1100/1101/1102/1103 (dGPU)
+#   gfx1150       RDNA 3.5 — Radeon 890M (Strix Point iGPU)
+#   gfx1151       RDNA 3.5 — Radeon 8060S (Strix Halo iGPU)
+#   gfx120x       RDNA 4   — Radeon 9x series (dGPU)
 #
 # The tarball and wheel URLs are derived from GPU_TARGET automatically.
 # Use ROCM_TARBALL_URL / PYTORCH_INDEX_URL to override for edge cases.
-ARG GPU_TARGET=gfx110X-all
+ARG GPU_TARGET=gfx1151
 ARG ROCM_VERSION=7.11.0
 ARG ROCM_TARBALL_URL=
 ARG PYTORCH_INDEX_URL=
@@ -74,16 +73,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   locales \
   fonts-liberation \
   run-one \
-  && curl -sL https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - \
+  libatomic1 \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-# Install ROCm from tarball
-RUN TARBALL_URL="${ROCM_TARBALL_URL:-https://repo.amd.com/rocm/tarball/therock-dist-linux-${GPU_TARGET}-${ROCM_VERSION}.tar.gz}" && \
-    mkdir -p /opt/rocm && \
-    wget -q "${TARBALL_URL}" -O /tmp/rocm.tar.gz && \
-    tar -xf /tmp/rocm.tar.gz -C /opt/rocm --strip-components=1 && \
-    rm /tmp/rocm.tar.gz
+# Download and install GPG key for AMD ROCm repo
+RUN mkdir -p /etc/apt/keyrings && \
+    wget -q https://repo.amd.com/rocm/packages/gpg/rocm.gpg -O - | \
+    gpg --dearmor -o /etc/apt/keyrings/amdrocm.gpg
+
+# Add AMD ROCm apt repository (Ubuntu 24.04)
+RUN echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] https://repo.amd.com/rocm/packages/ubuntu2404 stable main' \
+    > /etc/apt/sources.list.d/rocm.list
+
+# Install ROCm from apt (package name uses GPU_TARGET, e.g. amdrocm7.11-gfx110X-all)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends amdrocm${ROCM_VERSION%.*}-${GPU_TARGET} && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install ROCm PyTorch
 RUN INDEX_URL="${PYTORCH_INDEX_URL:-https://repo.amd.com/rocm/whl/${GPU_TARGET}/}" && \
