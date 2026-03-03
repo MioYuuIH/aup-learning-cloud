@@ -110,7 +110,9 @@ jobs:
         id: gpu
         run: |
           # ── Single source of truth for GPU targets ──
-          # To add a new target: append to ALL_TARGETS below.
+          # To add a new target: append to ALL_TARGETS and TAG_MAP below.
+          # Values are the AMD tarball names (used as GPU_TARGET build-arg).
+          # Tag suffixes strip -all/-dgpu (e.g. gfx110X-all → gfx110X).
           ALL_TARGETS='["gfx110X-all","gfx1150","gfx1151","gfx1152","gfx120X-all"]'
           DEFAULT_TARGET="gfx110X-all"
 
@@ -295,8 +297,7 @@ jobs:
       - name: Derive tag suffix
         id: suffix
         run: |
-          TAG_SUFFIX=$(echo "${{ matrix.gpu_target }}" | sed 's/-all$//; s/-dgpu$//')
-          echo "tag_suffix=${TAG_SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "tag_suffix=${{ matrix.gpu_target }}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (target-suffixed tags)
         id: meta-suffixed
@@ -434,22 +435,21 @@ jobs:
       - name: Derive tag suffix
         id: suffix
         run: |
-          TAG_SUFFIX=$(echo "${{ matrix.gpu_target }}" | sed 's/-all$//; s/-dgpu$//')
-          echo "tag_suffix=${TAG_SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "tag_suffix=${{ matrix.gpu_target }}" >> "$GITHUB_OUTPUT"
 
       - name: Determine base image tag
+        if: github.event_name != 'pull_request'
         id: base
         run: |
-          # Derive the branch/tag-based base image reference
-          REF="${GITHUB_REF##*/}"
+          SUFFIX="${{ steps.suffix.outputs.tag_suffix }}"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            BASE_TAG="${REF}-${{ steps.suffix.outputs.tag_suffix }}"
-          elif [[ "$REF" == "main" ]]; then
-            BASE_TAG="latest-${{ steps.suffix.outputs.tag_suffix }}"
+            TAG="${GITHUB_REF##*/}-${SUFFIX}"
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            TAG="latest-${SUFFIX}"
           else
-            BASE_TAG="${REF}-${{ steps.suffix.outputs.tag_suffix }}"
+            TAG="${GITHUB_REF##refs/heads/}-${SUFFIX}"
           fi
-          echo "image=${{ needs.changes.outputs.registry }}/auplc-base:${BASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image=${{ needs.changes.outputs.registry }}/auplc-base:${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (target-suffixed tags)
         id: meta-suffixed
@@ -509,7 +509,7 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.meta-suffixed.outputs.labels }}
           build-args: |
-            BASE_IMAGE=${{ steps.base.outputs.image }}
+            ${{ steps.base.outputs.image && format('BASE_IMAGE={0}', steps.base.outputs.image) || '' }}
           cache-from: type=gha,scope=course-${{ matrix.course }}-${{ matrix.gpu_target }}
           cache-to: type=gha,mode=max,scope=course-${{ matrix.course }}-${{ matrix.gpu_target }}
           provenance: false
