@@ -90,13 +90,28 @@ function detect_gpu() {
     fi
 
     # Fallback: parse KFD topology (available when amdgpu driver is loaded)
-    local gfx_dec
-    gfx_dec=$(awk '$1 == "gfx_target_version" && $2 > 0 {print $2; exit}' \
+    # gfx_target_version uses two encodings depending on kernel version:
+    #   - Hex-packed (kernel <6.14):  0x0B0501 = 722177  → 11, 5, 1  → gfx1151
+    #   - Decimal    (kernel ≥6.14):  110501             → 11, 05, 01 → gfx1151
+    # Hex-packed values for any real GPU (major≥9) start at 0x090000 = 589824,
+    # while the largest decimal value for current GPUs is ~120201. We use
+    # 200000 as the threshold to distinguish the two formats.
+    local gfx_ver
+    gfx_ver=$(awk '$1 == "gfx_target_version" && $2 > 0 {print $2; exit}' \
         /sys/class/kfd/kfd/topology/nodes/*/properties 2>/dev/null)
-    if [[ -n "$gfx_dec" ]]; then
-        local major=$(( (gfx_dec >> 16) & 0xff ))
-        local minor=$(( (gfx_dec >> 8) & 0xff ))
-        local stepping=$(( gfx_dec & 0xff ))
+    if [[ -n "$gfx_ver" ]]; then
+        local major minor stepping
+        if (( gfx_ver >= 200000 )); then
+            # Hex-packed: major[31:16] minor[15:8] stepping[7:0]
+            major=$(( (gfx_ver >> 16) & 0xff ))
+            minor=$(( (gfx_ver >> 8) & 0xff ))
+            stepping=$(( gfx_ver & 0xff ))
+        else
+            # Decimal: MMSSPP (major*10000 + minor*100 + stepping)
+            major=$(( gfx_ver / 10000 ))
+            minor=$(( (gfx_ver / 100) % 100 ))
+            stepping=$(( gfx_ver % 100 ))
+        fi
         echo "gfx${major}${minor}${stepping}"
         return 0
     fi
