@@ -28,6 +28,7 @@ on:
       - 'runtime/hub/**'
       - 'projects/**'
       - '.github/workflows/docker-build.yml'
+      - '.github/build-config.json'
   pull_request:
     branches: [main, develop]
     paths:
@@ -35,6 +36,7 @@ on:
       - 'runtime/hub/**'
       - 'projects/**'
       - '.github/workflows/docker-build.yml'
+      - '.github/build-config.json'
   workflow_dispatch:
     inputs:
       version:
