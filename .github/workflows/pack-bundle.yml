@@ -39,6 +39,11 @@ on:
           - strix-halo
           - strix
           - phx
+      image_registry:
+        description: 'Registry prefix for custom images'
+        required: false
+        default: 'ghcr.io/amdresearch'
+        type: string
       create_release:
         description: 'Create a GitHub Release with the bundle'
         required: false
@@ -80,7 +85,9 @@ jobs:
 
       - name: Run pack command
         run: |
-          GPU_TYPE="${{ inputs.gpu_type }}" ./auplc-installer pack
+          GPU_TYPE="${{ inputs.gpu_type }}" \
+          IMAGE_REGISTRY="${{ inputs.image_registry }}" \
+          ./auplc-installer pack
 
       - name: Verify bundle
         run: |

@@ -42,13 +42,16 @@ MIRROR_PREFIX="${MIRROR_PREFIX:-}"
 MIRROR_PIP="${MIRROR_PIP:-}"
 MIRROR_NPM="${MIRROR_NPM:-}"
 
+# Registry prefix for custom images (override for forks or private registries)
+IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/amdresearch}"
+
 # Custom images (built locally or pulled from GHCR)
 CUSTOM_IMAGES=(
-    "ghcr.io/amdresearch/auplc-hub:latest"
-    "ghcr.io/amdresearch/auplc-default:latest"
-    "ghcr.io/amdresearch/auplc-cv:latest"
-    "ghcr.io/amdresearch/auplc-dl:latest"
-    "ghcr.io/amdresearch/auplc-llm:latest"
+    "${IMAGE_REGISTRY}/auplc-hub:latest"
+    "${IMAGE_REGISTRY}/auplc-default:latest"
+    "${IMAGE_REGISTRY}/auplc-cv:latest"
+    "${IMAGE_REGISTRY}/auplc-dl:latest"
+    "${IMAGE_REGISTRY}/auplc-llm:latest"
 )
 
 # GPU-specific custom images (have :latest-<gpu_target> tags)
@@ -105,16 +108,18 @@ function detect_offline_bundle() {
     K3S_USE_DOCKER=0
     echo "Offline bundle detected at: ${BUNDLE_DIR}"
 
-    # Parse GPU config from manifest without python
-    local gpu_target accel_key accel_env
+    # Parse config from manifest without python
+    local gpu_target accel_key accel_env image_registry
     gpu_target=$(sed -n 's/.*"gpu_target"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${BUNDLE_DIR}/manifest.json")
     accel_key=$(sed -n 's/.*"accel_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${BUNDLE_DIR}/manifest.json")
     accel_env=$(sed -n 's/.*"accel_env"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${BUNDLE_DIR}/manifest.json")
+    image_registry=$(sed -n 's/.*"image_registry"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${BUNDLE_DIR}/manifest.json")
 
     if [[ -n "${gpu_target}" ]]; then
         GPU_TARGET="${gpu_target}"
         ACCEL_KEY="${accel_key}"
         ACCEL_ENV="${accel_env}"
+        [[ -n "${image_registry}" ]] && IMAGE_REGISTRY="${image_registry}"
         echo "  GPU config: accelerator=${ACCEL_KEY}, GPU_TARGET=${GPU_TARGET}${ACCEL_ENV:+, HSA_OVERRIDE=${ACCEL_ENV}}"
     fi
 }
@@ -242,11 +247,11 @@ function generate_values_overlay() {
 
         echo "  resources:"
         echo "    images:"
-        echo "      gpu: \"ghcr.io/amdresearch/auplc-base:${tag}\""
-        echo "      Course-CV: \"ghcr.io/amdresearch/auplc-cv:${tag}\""
-        echo "      Course-DL: \"ghcr.io/amdresearch/auplc-dl:${tag}\""
-        echo "      Course-LLM: \"ghcr.io/amdresearch/auplc-llm:${tag}\""
-        echo "      Course-PhySim: \"ghcr.io/amdresearch/auplc-physim:${tag}\""
+        echo "      gpu: \"${IMAGE_REGISTRY}/auplc-base:${tag}\""
+        echo "      Course-CV: \"${IMAGE_REGISTRY}/auplc-cv:${tag}\""
+        echo "      Course-DL: \"${IMAGE_REGISTRY}/auplc-dl:${tag}\""
+        echo "      Course-LLM: \"${IMAGE_REGISTRY}/auplc-llm:${tag}\""
+        echo "      Course-PhySim: \"${IMAGE_REGISTRY}/auplc-physim:${tag}\""
         echo "    metadata:"
         for resource in gpu Course-CV Course-DL Course-LLM Course-PhySim; do
             echo "      ${resource}:"
@@ -589,14 +594,14 @@ function pull_custom_images() {
 
     # GPU-specific images: pull :latest-<gpu_target>, also tag as :latest
     for name in "${GPU_CUSTOM_NAMES[@]}"; do
-        local image="ghcr.io/amdresearch/${name}:${tag}"
+        local image="${IMAGE_REGISTRY}/${name}:${tag}"
         if pull_and_tag "${image}"; then
-            docker tag "${image}" "ghcr.io/amdresearch/${name}:latest"
+            docker tag "${image}" "${IMAGE_REGISTRY}/${name}:latest"
 
             if [[ "${K3S_USE_DOCKER}" != "1" ]]; then
                 sudo docker save \
-                    "ghcr.io/amdresearch/${name}:latest" \
-                    "ghcr.io/amdresearch/${name}:${tag}" \
+                    "${IMAGE_REGISTRY}/${name}:latest" \
+                    "${IMAGE_REGISTRY}/${name}:${tag}" \
                     -o "${K3S_IMAGES_DIR}/${name}.tar"
             fi
         else
@@ -606,7 +611,7 @@ function pull_custom_images() {
 
     # Non-GPU images: pull :latest
     for name in "${PLAIN_CUSTOM_NAMES[@]}"; do
-        local image="ghcr.io/amdresearch/${name}:latest"
+        local image="${IMAGE_REGISTRY}/${name}:latest"
         if pull_and_tag "${image}"; then
             if [[ "${K3S_USE_DOCKER}" != "1" ]]; then
                 sudo docker save "${image}" -o "${K3S_IMAGES_DIR}/${name}.tar"
@@ -890,32 +895,41 @@ function pack_save_custom_images_pull() {
     local staging="$1"
     local tag="latest-${GPU_TARGET}"
 
-    echo "--- Pulling and saving custom images from GHCR ---"
+    echo "--- Pulling and saving custom images (${IMAGE_REGISTRY}) ---"
     mkdir -p "${staging}/images/custom"
 
+    local failed=0
+
     for name in "${GPU_CUSTOM_NAMES[@]}"; do
-        local image="ghcr.io/amdresearch/${name}:${tag}"
+        local image="${IMAGE_REGISTRY}/${name}:${tag}"
         if pull_and_tag "${image}"; then
-            docker tag "${image}" "ghcr.io/amdresearch/${name}:latest"
+            docker tag "${image}" "${IMAGE_REGISTRY}/${name}:latest"
             docker save \
-                "ghcr.io/amdresearch/${name}:latest" \
-                "ghcr.io/amdresearch/${name}:${tag}" \
+                "${IMAGE_REGISTRY}/${name}:latest" \
+                "${IMAGE_REGISTRY}/${name}:${tag}" \
                 -o "${staging}/images/custom/${name}.tar"
             echo "  Saved: ${name} (:latest + :${tag})"
         else
-            echo "  ERROR: Failed to pull ${image}" >&2
+            failed=$((failed + 1))
         fi
     done
 
     for name in "${PLAIN_CUSTOM_NAMES[@]}"; do
-        local image="ghcr.io/amdresearch/${name}:latest"
+        local image="${IMAGE_REGISTRY}/${name}:latest"
         if pull_and_tag "${image}"; then
             docker save "${image}" -o "${staging}/images/custom/${name}.tar"
             echo "  Saved: ${name}"
         else
-            echo "  ERROR: Failed to pull ${image}" >&2
+            failed=$((failed + 1))
         fi
     done
+
+    if [[ "${failed}" -gt 0 ]]; then
+        echo "Error: ${failed} custom image(s) failed to pull. Bundle would be incomplete." >&2
+        echo "  Check that IMAGE_REGISTRY (${IMAGE_REGISTRY}) is correct and you have pull access." >&2
+        rm -rf "${staging}"
+        exit 1
+    fi
 }
 
 # Save custom images: build locally via Makefile, then docker save
@@ -938,14 +952,14 @@ function pack_save_custom_images_local() {
 
     for name in "${GPU_CUSTOM_NAMES[@]}"; do
         docker save \
-            "ghcr.io/amdresearch/${name}:latest" \
-            "ghcr.io/amdresearch/${name}:${tag}" \
+            "${IMAGE_REGISTRY}/${name}:latest" \
+            "${IMAGE_REGISTRY}/${name}:${tag}" \
             -o "${staging}/images/custom/${name}.tar"
         echo "  Saved: ${name} (:latest + :${tag})"
     done
 
     for name in "${PLAIN_CUSTOM_NAMES[@]}"; do
-        docker save "ghcr.io/amdresearch/${name}:latest" \
+        docker save "${IMAGE_REGISTRY}/${name}:latest" \
             -o "${staging}/images/custom/${name}.tar"
         echo "  Saved: ${name}"
     done
@@ -983,8 +997,10 @@ function pack_save_external_images() {
     done
 
     if [[ ${#failed_images[@]} -gt 0 ]]; then
-        echo "  WARNING: Failed to pull ${#failed_images[@]} images:"
-        for img in "${failed_images[@]}"; do echo "    - ${img}"; done
+        echo "Error: ${#failed_images[@]} external image(s) failed to pull:" >&2
+        for img in "${failed_images[@]}"; do echo "    - ${img}" >&2; done
+        rm -rf "${staging}"
+        exit 1
     fi
 }
 
@@ -997,6 +1013,7 @@ function pack_write_manifest() {
     "gpu_target": "${GPU_TARGET}",
     "accel_key": "${ACCEL_KEY}",
     "accel_env": "${ACCEL_ENV}",
+    "image_registry": "${IMAGE_REGISTRY}",
     "k3s_version": "${K3S_VERSION}",
     "helm_version": "${HELM_VERSION}",
     "k9s_version": "${K9S_VERSION}"
@@ -1119,6 +1136,10 @@ Options (can also be set via environment variables):
     ./auplc-installer install --gpu=phx --docker=0
     ./auplc-installer img build base-rocm --gpu=strix
     ./auplc-installer install --mirror=mirror.example.com
+
+Image Registry:
+  IMAGE_REGISTRY  Registry prefix for custom images (default: ghcr.io/amdresearch)
+                  Override when pulling from a fork or private registry.
 
 Offline Deployment:
   1. On a machine with internet access, create bundle:
