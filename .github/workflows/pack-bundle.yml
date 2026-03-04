@@ -44,6 +44,11 @@ on:
         required: false
         default: 'ghcr.io/amdresearch'
         type: string
+      image_tag:
+        description: 'Image tag prefix (e.g. latest, develop, v1.0)'
+        required: false
+        default: 'latest'
+        type: string
       create_release:
         description: 'Create a GitHub Release with the bundle'
         required: false
@@ -87,6 +92,7 @@ jobs:
         run: |
           GPU_TYPE="${{ inputs.gpu_type }}" \
           IMAGE_REGISTRY="${{ inputs.image_registry }}" \
+          IMAGE_TAG="${{ inputs.image_tag }}" \
           ./auplc-installer pack
 
       - name: Verify bundle
