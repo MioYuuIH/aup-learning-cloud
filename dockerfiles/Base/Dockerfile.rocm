@@ -109,7 +109,11 @@ RUN WHL_TARGET="${PYTORCH_WHL_TARGET:-${GPU_TARGET}}" && \
     INDEX_URL="${PYTORCH_INDEX_URL:-https://repo.amd.com/rocm/whl/${WHL_TARGET}/}" && \
     python3 -m pip install --no-cache-dir \
     --index-url "${INDEX_URL}" \
-    torch torchvision torchaudio
+    torch torchvision torchaudio && \
+    SDK_INC=$(python3 -c "import _rocm_sdk_core, os; print(os.path.join(os.path.dirname(_rocm_sdk_core.__file__), 'include'))" 2>/dev/null) && \
+    if [ -n "$SDK_INC" ] && [ ! -e /opt/rocm/include/hip ]; then \
+        ln -s "${SDK_INC}/hip" /opt/rocm/include/hip; \
+    fi
 
 # Install JupyterHub and related packages
 RUN pip3 install --no-cache-dir \
