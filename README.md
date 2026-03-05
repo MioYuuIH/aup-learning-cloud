@@ -23,7 +23,7 @@ SOFTWARE.
 
 AUP Learning Cloud is a tailored JupyterHub deployment designed to provide an intuitive and hands-on AI learning experience. It features a comprehensive suite of AI toolkits running on AMD hardware acceleration, enabling users to learn and experiment with ease.
 
-![Software Architecture](docs/imgs/software-stack.png)
+![Software Architecture](deploy/docs/images/software-stack.png)
 
 
 ## Quick Start
@@ -79,9 +79,6 @@ For multi-node cluster installation or need more control over the deployment pro
 
 AUP Learning Cloud offers the following Learning Toolkits:
 
-> [!IMPORTANT]
-> Only [**Deep Learning**](projects/DL) and [**Large Language Model from Scratch**](projects/LLM) are available in the v1.0 release.
-
 - [**Computer Vision**](projects/CV) \
 Includes 10 hands-on labs covering common computer vision concepts and techniques.
 
@@ -90,6 +87,9 @@ Includes 12 hands-on labs covering common deep learning concepts and techniques.
 
 - [**Large Language Model from Scratch**](projects/LLM) \
 Includes 9 hands-on labs designed to teach LLM development from scratch.
+
+- [**Physical Simulation**](projects/PhySim) \
+Hands-on labs for physics simulation and robotics using Genesis.
 
 ## Key Features
 
@@ -118,27 +118,30 @@ Dynamic NFS provisioning ensures scalable and persistent storage for user data, 
 
 ## Available Notebook Environments
 
-Current environments are set up as `RESOURCE_IMAGES` in `runtime/chart/files/hub`. These settings should be consistent with `Prepullers` in `runtime/values.yaml`.
+Current environments are configured via `custom.resources.images` in `runtime/values.yaml`. These settings should be consistent with `prePuller.extraImages`.
 
-| Environment | Image                                    | Version | Hardware                        |
-| ----------- | ---------------------------------------- | ------- | ------------------------------- |
-| Base CPU    | `ghcr.io/amdresearch/auplc-default` | v1.0    | CPU                             |
-| CV COURSE   | `ghcr.io/amdresearch/auplc-cv`    | v1.0  | GPU (Strix-Halo) |
-| DL COURSE   | `ghcr.io/amdresearch/auplc-dl`    | v1.0  | GPU (Strix-Halo) |
-| LLM COURSE  | `ghcr.io/amdresearch/auplc-llm`   | v1.0  | GPU (Strix-Halo)                |
+| Environment | Image                                    | Hardware                        |
+| ----------- | ---------------------------------------- | ------------------------------- |
+| Base CPU    | `ghcr.io/amdresearch/auplc-default` | CPU                             |
+| GPU Base    | `ghcr.io/amdresearch/auplc-base`   | GPU                             |
+| CV COURSE   | `ghcr.io/amdresearch/auplc-cv`    | GPU |
+| DL COURSE   | `ghcr.io/amdresearch/auplc-dl`    | GPU |
+| LLM COURSE  | `ghcr.io/amdresearch/auplc-llm`   | GPU                |
+| PhySim COURSE | `ghcr.io/amdresearch/auplc-physim` | GPU               |
 
 ## Documentation
 
-- [JupyterHub Configuration](docs/jupyterhub/README.md) - Detailed JupyterHub settings
-- [Authentication Guide](docs/jupyterhub/authentication-guide.md) - GitHub OAuth and native authentication
-- [User Management Guide](docs/jupyterhub/user-management.md) - Batch user operations with scripts
-- [User Quota System](docs/jupyterhub/quota-system.md) - Resource usage tracking and quota management
-- [GitHub OAuth Setup](docs/jupyterhub/How_to_Setup_GitHub_OAuth.md) - OAuth configuration
-- [Maintenance Manual](docs/user-manual/aup-remote-lab-user-manual-admin-new.md) - Operations guide
+Full documentation is available at: **https://amdresearch.github.io/aup-learning-cloud/**
+
+- [Deployment Guide](deploy/README.md) - Single-node and multi-node deployment
+- [Configuration Reference](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/configuration-reference.html) - `runtime/values.yaml` field reference
+- [Authentication Guide](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/authentication-guide.html) - GitHub OAuth and native authentication
+- [User Management Guide](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/user-management.html) - Batch user operations with scripts
+- [User Quota System](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/quota-system.html) - Resource usage tracking and quota management
 
 ## Contributing
 
-Please refer to [CONTRIBUTING.md](docs/contribute.md) for details on how to contribute to the project.
+Please refer to [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to the project.
 
 ## Acknowledgment
 

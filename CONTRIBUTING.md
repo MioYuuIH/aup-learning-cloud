@@ -15,8 +15,8 @@ Thank you for your interest in contributing to AUP Learning Cloud! This document
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/AMDResearch/aup-learning-cloud-dev.git
-   cd aup-learning-cloud-dev
+   git clone https://github.com/AMDResearch/aup-learning-cloud.git
+   cd aup-learning-cloud
    ```
 
 2. **Install Python dependencies**
@@ -26,7 +26,7 @@ Thank you for your interest in contributing to AUP Learning Cloud! This document
 
 3. **Install frontend dependencies**
    ```bash
-   cd runtime/admin/frontend/admin-frontend
+   cd runtime/hub/frontend
    pnpm install
    cd -
    ```
@@ -63,11 +63,11 @@ ruff format .
 - **ESLint**: JavaScript/TypeScript/Vue linter
 - **Prettier**: Code formatter
 - **TypeScript**: Type checking
-- **Config**: `runtime/admin/frontend/admin-frontend/eslint.config.js`, `.prettierrc`
+- **Config**: `runtime/hub/frontend/eslint.config.js`, `.prettierrc`
 
 Run checks:
 ```bash
-cd runtime/admin/frontend/admin-frontend
+cd runtime/hub/frontend
 
 # Lint
 pnpm run lint
@@ -140,7 +140,7 @@ find . -name "*.sh" -o -name "*.bash" | \
    # YAML
    yamllint .
 
-   # Frontend (from runtime/admin/frontend/admin-frontend)
+   # Frontend (from runtime/hub/frontend)
    pnpm run lint
    pnpm run format:check
    pnpm run type-check
@@ -196,6 +196,6 @@ Standard production code rules apply to:
 ## Questions?
 
 - Open an issue for bugs or feature requests
-- Check existing documentation in `docs/`
+- Check existing documentation at https://amdresearch.github.io/aup-learning-cloud/
 
 Thank you for contributing!
