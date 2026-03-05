@@ -73,7 +73,7 @@ EXTERNAL_IMAGES=(
     "quay.io/jupyterhub/k8s-singleuser-sample:4.1.0"
     "registry.k8s.io/kube-scheduler:v1.30.8"
     "registry.k8s.io/pause:3.10"
-    "traefik:v3.3.1"
+    # traefik is already included in the K3s airgap images bundle
     "curlimages/curl:8.5.0"
     "alpine/git:2.47.2"
 )
