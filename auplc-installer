@@ -812,7 +812,6 @@ function deploy_all_components() {
     generate_values_overlay
     install_tools
     install_k3s_single_node
-    deploy_rocm_gpu_device_plugin
 
     if [[ "${OFFLINE_MODE}" == "1" ]]; then
         load_offline_images
@@ -824,6 +823,7 @@ function deploy_all_components() {
         local_image_build
     fi
 
+    deploy_rocm_gpu_device_plugin
     deply_aup_learning_cloud_runtime
 }
 
