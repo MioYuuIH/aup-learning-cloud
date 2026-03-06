@@ -264,6 +264,13 @@ function generate_values_overlay() {
             echo "        acceleratorKeys:"
             echo "          - ${ACCEL_KEY}"
         done
+        if [[ "${OFFLINE_MODE}" == "1" ]]; then
+            echo "hub:"
+            echo "  image:"
+            echo "    name: \"${IMAGE_REGISTRY}/auplc-hub\""
+            echo "    tag: \"${IMAGE_TAG}\""
+            echo "    pullPolicy: IfNotPresent"
+        fi
     } > "${overlay_path}"
 }
 
@@ -476,6 +483,9 @@ function deploy_rocm_gpu_device_plugin() {
 
     if [[ "${OFFLINE_MODE}" == "1" ]]; then
         kubectl create -f "${BUNDLE_DIR}/manifests/k8s-ds-amdgpu-dp.yaml"
+        # Patch imagePullPolicy to avoid pulling from registry in air-gapped environments
+        kubectl patch ds amdgpu-device-plugin-daemonset -n kube-system --type=json \
+            -p '[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'
     else
         kubectl create -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
     fi
