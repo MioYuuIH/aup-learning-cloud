@@ -81,11 +81,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
 
+      - name: Resolve image tag
+        id: tag
+        run: |
+          # Use explicit input if provided; otherwise sanitize branch name
+          # (Docker tags cannot contain '/', replace with '-')
+          if [[ -n "${{ inputs.image_tag }}" ]]; then
+            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run pack command
         env:
           GPU_TYPE: ${{ inputs.gpu_type }}
           IMAGE_REGISTRY: ${{ inputs.image_registry }}
-          IMAGE_TAG: ${{ inputs.image_tag || github.ref_name }}
+          IMAGE_TAG: ${{ steps.tag.outputs.value }}
         run: ./auplc-installer pack
 
       - name: Verify bundle
@@ -122,7 +133,7 @@ jobs:
           ## Offline Deployment Bundle
 
           - **GPU Type**: ${{ inputs.gpu_type }}
-          - **Image Tag**: ${{ inputs.image_tag || github.ref_name }}
+          - **Image Tag**: ${{ steps.tag.outputs.value }}
           - **Bundle**: ${BUNDLE_NAME}
           - **Built from**: ${{ github.sha }} (${{ github.ref_name }})
 
