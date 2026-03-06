@@ -1036,6 +1036,9 @@ EOF
 function pack_bundle() {
     local flag="${1:-}"
 
+    # Sanitize IMAGE_TAG: Docker tags cannot contain '/' (e.g. branch names)
+    IMAGE_TAG="${IMAGE_TAG//\//-}"
+
     echo "==========================================="
     echo "AUP Learning Cloud - Pack Offline Bundle"
     if [[ "${flag}" == "--local" ]]; then

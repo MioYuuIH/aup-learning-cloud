@@ -84,13 +84,11 @@ jobs:
       - name: Resolve image tag
         id: tag
         run: |
-          # Use explicit input if provided; otherwise sanitize branch name
-          # (Docker tags cannot contain '/', replace with '-')
-          if [[ -n "${{ inputs.image_tag }}" ]]; then
-            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
-          fi
+          # Use explicit input if provided; otherwise derive from branch name.
+          # Sanitize: Docker tags cannot contain '/' — replace with '-'.
+          RAW="${{ inputs.image_tag || github.ref_name }}"
+          echo "value=${RAW//\//-}" >> "$GITHUB_OUTPUT"
+          echo "Resolved IMAGE_TAG: ${RAW//\//-}"
 
       - name: Run pack command
         env:
