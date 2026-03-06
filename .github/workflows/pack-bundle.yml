@@ -122,8 +122,6 @@ jobs:
           BUNDLE=$(ls auplc-bundle-*.tar.gz)
           echo "Bundle: ${BUNDLE}"
           echo "Size: $(du -sh "${BUNDLE}" | cut -f1)"
-          tar tzf "${BUNDLE}" 2>/dev/null | head -30
-
       - name: Upload bundle as artifact
         uses: actions/upload-artifact@v4
         with:
@@ -202,8 +200,6 @@ jobs:
           BUNDLE=$(ls auplc-bundle-*.tar.gz)
           echo "Bundle: ${BUNDLE}"
           echo "Size: $(du -sh "${BUNDLE}" | cut -f1)"
-          tar tzf "${BUNDLE}" 2>/dev/null | head -30
-
       - name: Upload bundle as artifact
         uses: actions/upload-artifact@v4
         with:
