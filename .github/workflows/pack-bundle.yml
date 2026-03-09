@@ -49,12 +49,6 @@ on:
         required: false
         default: 'ghcr.io/amdresearch'
         type: string
-      create_release:
-        description: 'Create a GitHub Release with the bundle'
-        required: false
-        default: false
-        type: boolean
-
 permissions:
   contents: write
   packages: read
@@ -232,31 +226,3 @@ jobs:
           retention-days: 7
           compression-level: 0  # already compressed
 
-      - name: Create GitHub Release
-        if: inputs.create_release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BUNDLE=$(ls auplc-bundle-*.tar.gz)
-          BUNDLE_NAME=$(basename "${BUNDLE}" .tar.gz)
-          TAG="bundle-${{ inputs.gpu_type }}-$(date +%Y%m%d)"
-
-          gh release create "${TAG}" "${BUNDLE}" \
-            --title "Offline Bundle: ${{ inputs.gpu_type }} ($(date +%Y-%m-%d))" \
-            --notes "$(cat <<EOF
-          ## Offline Deployment Bundle
-
-          - **GPU Type**: ${{ inputs.gpu_type }}
-          - **Image Tag**: ${{ steps.tag.outputs.value }}
-          - **Bundle**: ${BUNDLE_NAME}
-          - **Built from**: ${{ github.sha }} (${{ github.ref_name }})
-
-          ### Usage
-          \`\`\`bash
-          tar xzf ${BUNDLE}
-          cd ${BUNDLE_NAME}
-          sudo ./auplc-installer install
-          \`\`\`
-          EOF
-          )"
-          echo "Release created: ${TAG}"
