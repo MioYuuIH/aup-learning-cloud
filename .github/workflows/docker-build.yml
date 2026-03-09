@@ -319,6 +319,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
             type=ref,event=branch
+            type=ref,event=tag
             type=ref,event=pr
 
       - name: Docker metadata (unsuffixed tags — default target only)
@@ -335,6 +336,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
             type=ref,event=branch
+            type=ref,event=tag
             type=ref,event=pr
 
       - name: Merge tags
@@ -455,6 +457,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
             type=ref,event=branch
+            type=ref,event=tag
             type=ref,event=pr
 
       - name: Docker metadata (unsuffixed tags — default target only)
@@ -471,6 +474,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
             type=ref,event=branch
+            type=ref,event=tag
             type=ref,event=pr
 
       - name: Merge tags
