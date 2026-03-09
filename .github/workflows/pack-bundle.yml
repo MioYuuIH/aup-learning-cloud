@@ -66,8 +66,8 @@ jobs:
     if: |
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
-      github.repository == 'AMDResearch/aup-learning-cloud' &&
-      startsWith(github.event.workflow_run.head_branch, 'v')
+      startsWith(github.event.workflow_run.head_branch, 'v') &&
+      (github.repository == 'AMDResearch/aup-learning-cloud' || github.repository == 'MioYuuIH/aup-learning-cloud')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
