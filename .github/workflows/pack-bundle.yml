@@ -100,19 +100,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Resolve image tag
+      - name: Resolve image tag and registry
         id: tag
         run: |
-          # For a release, use the tag name (e.g. v1.0); Docker tags cannot contain '/'.
           RAW="${{ github.event.workflow_run.head_branch }}"
           SANITIZED="${RAW//\//-}"
           echo "value=${SANITIZED}" >> "$GITHUB_OUTPUT"
           echo "Resolved IMAGE_TAG: ${SANITIZED}"
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "registry=ghcr.io/${OWNER}" >> "$GITHUB_OUTPUT"
 
       - name: Run pack command
         env:
           GPU_TYPE: ${{ matrix.gpu_type }}
-          IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+          IMAGE_REGISTRY: ${{ steps.tag.outputs.registry }}
           IMAGE_TAG: ${{ steps.tag.outputs.value }}
         run: ./auplc-installer pack
 
