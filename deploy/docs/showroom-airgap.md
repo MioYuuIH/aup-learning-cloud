@@ -62,6 +62,49 @@ compute node.
 | `10.88.0.20-10.88.0.80` | Compute workers, preferably DHCP reservations |
 | `10.88.0.100-10.88.0.199` | Visitor and temporary-device DHCP range |
 
+Use DHCP reservations on the cabinet router/AP when possible. If the router/AP
+does not support reservations, configure static IPs on each Ubuntu host instead.
+The network interface name in the examples below is `enp1s0`; replace it with
+the actual interface connected to the cabinet switch.
+
+Example master workstation netplan:
+
+```yaml
+network:
+  version: 2
+  ethernets:
+    enp1s0:
+      dhcp4: false
+      addresses:
+        - 10.88.0.10/24
+      routes:
+        - to: default
+          via: 10.88.0.1
+      nameservers:
+        addresses:
+          - 10.88.0.1
+          - 1.1.1.1
+```
+
+Example compute worker netplan:
+
+```yaml
+network:
+  version: 2
+  ethernets:
+    enp1s0:
+      dhcp4: false
+      addresses:
+        - 10.88.0.20/24
+      routes:
+        - to: default
+          via: 10.88.0.1
+      nameservers:
+        addresses:
+          - 10.88.0.1
+          - 1.1.1.1
+```
+
 Local entrypoint:
 
 ```text
@@ -131,6 +174,75 @@ Run this phase before moving the cabinet to the exhibition area.
 14. Disconnect the WAN side and verify that the local entrypoint and core
     courses still start.
 
+## Ansible Cluster Bring-up
+
+Use Ansible after the cabinet LAN, host-level Zot, and the node IPs are ready.
+The example inventory is `deploy/ansible/inventory.showroom-airgap.yml.example`.
+
+1. Copy the example inventory and edit it for the actual node count, hostnames,
+   interface names, and token:
+
+   ```bash
+   cd deploy/ansible
+   cp inventory.showroom-airgap.yml.example inventory.showroom-airgap.yml
+   vim inventory.showroom-airgap.yml
+   ```
+
+2. Confirm SSH access from the Ansible controller to every node:
+
+   ```bash
+   ansible -i inventory.showroom-airgap.yml all -m ping
+   ```
+
+3. Replace `flannel-iface: enp1s0` in `server_config_yaml` if the master
+   workstation uses a different switch-facing interface. Check with:
+
+   ```bash
+   ip -br link
+   ip route get 10.88.0.1
+   ```
+
+4. If you are using k3s airgap artifacts, copy them to every node at the same
+   path and uncomment `airgap_dir` in the inventory. If the preparation network
+   is still available and Zot already contains every required image, you can
+   leave `airgap_dir` commented for the first bring-up.
+
+5. Run the base preparation playbook:
+
+   ```bash
+   sudo ansible-playbook -i inventory.showroom-airgap.yml playbooks/pb-base.yml
+   ```
+
+6. Install the k3s cluster:
+
+   ```bash
+   sudo ansible-playbook -i inventory.showroom-airgap.yml playbooks/pb-k3s-site.yml
+   ```
+
+   The inventory writes `/etc/rancher/k3s/registries.yaml` on all nodes, points
+   containerd at `http://10.88.0.10:5000`, and labels agent nodes with
+   `auplc.node-role=compute`.
+
+7. Install ROCm on the compute nodes if required for the course images:
+
+   ```bash
+   sudo ansible-playbook -i inventory.showroom-airgap.yml playbooks/pb-rocm.yml
+   ```
+
+8. Verify the cluster from the master workstation:
+
+   ```bash
+   kubectl get nodes -o wide
+   kubectl get nodes --show-labels
+   ```
+
+9. If a worker was added manually or missed the label, fix it before deploying
+   the showroom overlays:
+
+   ```bash
+   kubectl label node <node-name> auplc.node-role=compute --overwrite
+   ```
+
 ## Zot Image Preload Checklist
 
 Zot solves container-image availability. It does not automatically make pip
@@ -189,6 +301,7 @@ JupyterHub users:
 
 ```text
 admin
+demo01-demo12
 ```
 
 Set their passwords before the exhibition through the Admin UI or the existing

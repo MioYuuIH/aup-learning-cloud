@@ -1,0 +1,79 @@
+# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+---
+# Example inventory for an exhibition cabinet prepared online and able to run
+# offline. The master workstation is fixed at 10.88.0.10. Compute nodes are
+# k3s agents only and can be added or removed between demos.
+k3s_cluster:
+  children:
+    server:
+      hosts:
+        auplc-master:
+          ansible_host: 10.88.0.10
+    agent:
+      hosts:
+        compute-01:
+          ansible_host: 10.88.0.20
+        compute-02:
+          ansible_host: 10.88.0.21
+        compute-03:
+          ansible_host: 10.88.0.22
+
+  vars:
+    ansible_port: 22
+    ansible_user: root
+
+    k3s_version: v1.32.3+k3s1
+    token: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET"
+    api_endpoint: 10.88.0.10
+    api_port: 6443
+
+    # Uncomment after copying k3s airgap artifacts to every node. The directory
+    # must exist on each host before running playbooks/pb-k3s-site.yml.
+    # airgap_dir: /opt/auplc-airgap/k3s
+
+    # Keep the master address stable so workers and kubeconfigs do not depend on
+    # venue DHCP or DNS.
+    server_config_yaml: |
+      node-ip: 10.88.0.10
+      flannel-iface: enp1s0
+      write-kubeconfig-mode: "0644"
+
+    # Every compute worker gets the same label at join time. The showroom Helm
+    # overlays schedule user notebook pods to nodes with this label.
+    extra_agent_args: >-
+      --node-label auplc.node-role=compute
+
+    # Host-level Zot runs on the master workstation before k3s starts. The same
+    # mirror configuration must be present on the server and all agents.
+    registries_config_yaml: |
+      mirrors:
+        docker.io:
+          endpoint:
+            - "http://10.88.0.10:5000/docker.io"
+        ghcr.io:
+          endpoint:
+            - "http://10.88.0.10:5000/ghcr.io"
+        quay.io:
+          endpoint:
+            - "http://10.88.0.10:5000/quay.io"
+        registry.k8s.io:
+          endpoint:
+            - "http://10.88.0.10:5000/registry.k8s.io"

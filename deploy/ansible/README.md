@@ -51,6 +51,22 @@ sudo ansible-playbook playbooks/pb-k3s-reset.yml
 sudo ansible-playbook playbooks/pb-k3s-reset.yml --limit <node_name>
 ```
 
+## Showroom Airgap Cabinet
+
+For an exhibition cabinet with a fixed master workstation, host-level Zot, and
+compute-only worker nodes, start from the showroom inventory example:
+
+```bash
+cp inventory.showroom-airgap.yml.example inventory.showroom-airgap.yml
+vim inventory.showroom-airgap.yml
+sudo ansible-playbook -i inventory.showroom-airgap.yml playbooks/pb-base.yml
+sudo ansible-playbook -i inventory.showroom-airgap.yml playbooks/pb-k3s-site.yml
+sudo ansible-playbook -i inventory.showroom-airgap.yml playbooks/pb-rocm.yml
+```
+
+See [Showroom Airgap Deployment](../docs/showroom-airgap.md) for the IP plan,
+Zot setup, registry mirror configuration, and worker add/remove SOP.
+
 ## Prerequisites
 
 - **Ansible**: 2.18.3+ (on controller node only)
