@@ -1,0 +1,143 @@
+# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Showroom offline overlay.
+#
+# Use this mode when the exhibition must run without internet access. GitHub
+# OAuth and Cloudflare are not required for the local Wi-Fi entrypoint; use the
+# native demo accounts on the login page.
+#
+# Deploy with:
+#   helm upgrade --install jupyterhub ./chart -n jupyterhub --create-namespace \
+#     -f values.yaml -f values.showroom-offline.yaml
+
+custom:
+  authMode: "multi"
+  githubOrgName: ""
+
+  hub:
+    allowedOrigins:
+      - "http://10.88.0.10:30890"
+      - "http://aup.local"
+  notebook:
+    allowedOrigins:
+      - "http://10.88.0.10:30890"
+      - "http://aup.local"
+
+  gitClone:
+    githubAppName: ""
+    defaultAccessToken: ""
+
+  quota:
+    enabled: true
+    defaultQuota: 999999
+
+hub:
+  config:
+    JupyterHub:
+      redirect_to_server: false
+      load_users:
+        admin:
+          admin: true
+        demo01: {}
+        demo02: {}
+        demo03: {}
+        demo04: {}
+        demo05: {}
+        demo06: {}
+        demo07: {}
+        demo08: {}
+        demo09: {}
+        demo10: {}
+        demo11: {}
+        demo12: {}
+    Authenticator:
+      allow_all: true
+      admin_users:
+        - admin
+    # Keep syntactically valid GitHub settings so the multi authenticator can
+    # render the page; users should choose the native login path offline.
+    GitHubOAuthenticator:
+      oauth_callback_url: "http://10.88.0.10:30890/hub/github/oauth_callback"
+      client_id: "offline-disabled"
+      client_secret: "offline-disabled"
+      allowed_organizations: []
+      scope: []
+    KubeSpawner:
+      image_pull_policy: IfNotPresent
+
+  db:
+    pvc:
+      storageClassName: local-path
+  image:
+    name: ghcr.io/amdresearch/auplc-hub
+    tag: latest
+    pullPolicy: IfNotPresent
+
+singleuser:
+  extraNodeAffinity:
+    required:
+      - matchExpressions:
+          - key: auplc.node-role
+            operator: In
+            values:
+              - compute
+  storage:
+    dynamic:
+      storageClass: local-path
+
+proxy:
+  service:
+    type: NodePort
+    nodePorts:
+      http: 30890
+      https: null
+
+ingress:
+  enabled: false
+
+prePuller:
+  hook:
+    enabled: true
+    pullOnlyOnChanges: true
+  continuous:
+    enabled: true
+  pullProfileListImages: true
+  extraImages:
+    auplc-default:
+      name: ghcr.io/amdresearch/auplc-default
+      tag: latest
+    auplc-base:
+      name: ghcr.io/amdresearch/auplc-base
+      tag: latest
+    auplc-cv:
+      name: ghcr.io/amdresearch/auplc-cv
+      tag: latest
+    auplc-dl:
+      name: ghcr.io/amdresearch/auplc-dl
+      tag: latest
+    auplc-llm:
+      name: ghcr.io/amdresearch/auplc-llm
+      tag: latest
+    auplc-physim:
+      name: ghcr.io/amdresearch/auplc-physim
+      tag: latest
+    auplc-hub:
+      name: ghcr.io/amdresearch/auplc-hub
+      tag: latest
