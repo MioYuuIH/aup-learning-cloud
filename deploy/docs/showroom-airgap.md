@@ -33,7 +33,7 @@ Venue network
       WAN
 [Cabinet Wi-Fi router/AP]
   LAN: 10.88.0.1/24
-  DHCP: visitors and temporary devices
+  DHCP/DNS/NAT: visitors, temporary devices, and internet egress
         |
 [Cabinet switch]
         |
@@ -53,6 +53,10 @@ The cabinet machines are compute-only workers. Do not run the control plane,
 Zot, Cloudflare tunnel, Hub database, or other required state on a removable
 compute node.
 
+The recommended first deployment keeps routing simple: the cabinet router/AP
+owns DHCP, DNS forwarding, the default gateway, and NAT. The master workstation
+does not act as a software router.
+
 ## Addressing Plan
 
 | Address | Purpose |
@@ -62,10 +66,32 @@ compute node.
 | `10.88.0.20-10.88.0.80` | Compute workers, preferably DHCP reservations |
 | `10.88.0.100-10.88.0.199` | Visitor and temporary-device DHCP range |
 
-Use DHCP reservations on the cabinet router/AP when possible. If the router/AP
-does not support reservations, configure static IPs on each Ubuntu host instead.
-The network interface name in the examples below is `enp1s0`; replace it with
-the actual interface connected to the cabinet switch.
+Configure the cabinet router/AP with:
+
+```text
+LAN IP:        10.88.0.1
+Subnet mask:   255.255.255.0
+DHCP:          enabled
+DHCP pool:     10.88.0.100-10.88.0.199
+Gateway:       10.88.0.1
+DNS server:    10.88.0.1
+WAN:           DHCP from the venue or company network
+```
+
+Use DHCP reservations on the cabinet router/AP when possible:
+
+```text
+auplc-master  -> 10.88.0.10
+compute-01    -> 10.88.0.20
+compute-02    -> 10.88.0.21
+compute-03    -> 10.88.0.22
+```
+
+With reservations, the Ubuntu hosts can keep `dhcp4: true` and still receive
+stable addresses. If the router/AP does not support reservations, configure
+static IPs on each Ubuntu host instead. The network interface name in the
+examples below is `enp1s0`; replace it with the actual interface connected to
+the cabinet switch.
 
 Example master workstation netplan:
 
@@ -114,8 +140,11 @@ http://10.88.0.10:30890
 Optional local DNS entry on the router/AP:
 
 ```text
-http://aup.local
+aup.local -> 10.88.0.10
 ```
+
+Then visitors can open `http://aup.local` if the router/AP supports local DNS.
+Otherwise, use `http://10.88.0.10:30890` directly.
 
 Online entrypoint when the venue network works:
 
@@ -130,11 +159,14 @@ https://<YOUR-SHOWROOM-DOMAIN>
 Run this phase before moving the cabinet to the exhibition area.
 
 1. Configure the router/AP LAN as `10.88.0.1/24`.
-2. Configure the master workstation as `10.88.0.10`.
-3. Install Zot on the master workstation as a host-level service.
-4. Copy `deploy/airgap/zot/config.yaml` to `/etc/zot/config.yaml`.
-5. Copy `deploy/airgap/zot/zot.service` to `/etc/systemd/system/zot.service`.
-6. Start Zot:
+2. Configure the router/AP DHCP pool as `10.88.0.100-10.88.0.199`.
+3. Add DHCP reservations for the master and compute workers when supported.
+4. Configure the master workstation as `10.88.0.10`.
+5. Configure compute workers as `10.88.0.20+`.
+6. Install Zot on the master workstation as a host-level service.
+7. Copy `deploy/airgap/zot/config.yaml` to `/etc/zot/config.yaml`.
+8. Copy `deploy/airgap/zot/zot.service` to `/etc/systemd/system/zot.service`.
+9. Start Zot:
 
    ```bash
    sudo mkdir -p /etc/zot /var/lib/auplc/zot
@@ -143,19 +175,19 @@ Run this phase before moving the cabinet to the exhibition area.
    curl http://10.88.0.10:5000/v2/_catalog
    ```
 
-7. Copy `deploy/airgap/k3s/registries.yaml` to every node at
+10. Copy `deploy/airgap/k3s/registries.yaml` to every node at
    `/etc/rancher/k3s/registries.yaml` before starting k3s.
-8. Preload all required images into Zot under the prefixed paths used by
+11. Preload all required images into Zot under the prefixed paths used by
    `registries.yaml`.
-9. Install k3s server on the master workstation.
-10. Join compute workers as k3s agents.
-11. Label each compute worker:
+12. Install k3s server on the master workstation.
+13. Join compute workers as k3s agents.
+14. Label each compute worker:
 
     ```bash
     kubectl label node <node-name> auplc.node-role=compute --overwrite
     ```
 
-12. Deploy the online overlay if GitHub OAuth and Cloudflare are ready:
+15. Deploy the online overlay if GitHub OAuth and Cloudflare are ready:
 
     ```bash
     cd runtime
@@ -163,7 +195,7 @@ Run this phase before moving the cabinet to the exhibition area.
       -f values.yaml -f values.showroom-online.yaml
     ```
 
-13. Deploy the offline overlay for a full no-internet rehearsal:
+16. Deploy the offline overlay for a full no-internet rehearsal:
 
     ```bash
     cd runtime
@@ -171,7 +203,7 @@ Run this phase before moving the cabinet to the exhibition area.
       -f values.yaml -f values.showroom-offline.yaml
     ```
 
-14. Disconnect the WAN side and verify that the local entrypoint and core
+17. Disconnect the WAN side and verify that the local entrypoint and core
     courses still start.
 
 ## Ansible Cluster Bring-up
