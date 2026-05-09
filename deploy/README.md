@@ -41,6 +41,7 @@ For full deployment instructions, see the documentation site:
 - [Single-Node Deployment](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html)
 - [Multi-Node Cluster Deployment](https://amdresearch.github.io/aup-learning-cloud/installation/multi-node.html)
 - [Configuration Reference](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/configuration-reference.html)
+- [Showroom Airgap Deployment](docs/showroom-airgap.md) - cabinet deployment with a fixed master workstation, Zot image cache, and flexible compute workers
 
 ## Quick Start
 
